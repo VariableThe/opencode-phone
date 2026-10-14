@@ -12,7 +12,24 @@ export function scrubUrl(url: string): string {
 export function scrubString(s: string): string {
   // Catch any embedded URL inside a free-text string (error messages often
   // contain them, e.g. "fetch failed: https://user:pw@host/...").
-  return s.replace(/https?:\/\/\S+/g, (m) => scrubUrl(m))
+  // Tailscale API keys (`tskey-api-…`) are bearer credentials that never
+  // appear inside a URL, so redact the recognizable prefix shape too.
+  return s
+    .replace(/https?:\/\/\S+/g, (m) => scrubUrl(m))
+    .replace(/\btskey-[A-Za-z0-9_-]+/g, "tskey-<redacted>")
+}
+
+// Redact exact secret values (e.g. a pasted Tailscale API token) from text
+// that may be logged or shared. scrubString only redacts secrets embedded
+// in URLs or matching a known prefix shape; a bare opaque token in an error
+// message would otherwise pass through untouched.
+export function redactSecrets(text: string, secrets: Array<string | undefined | null>): string {
+  let out = text
+  for (const secret of secrets) {
+    if (!secret || !secret.trim()) continue
+    out = out.split(secret).join("<redacted>")
+  }
+  return out
 }
 
 // Harder redaction for text that leaves the device (support inbox): drop

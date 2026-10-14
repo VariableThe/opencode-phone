@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { scrubUrl, scrubString, scrubObject, redactHostAndUrls } from "./scrub.ts"
+import { scrubUrl, scrubString, scrubObject, redactHostAndUrls, redactSecrets } from "./scrub.ts"
 
 // scrubUrl ----------------------------------------------------------------
 
@@ -135,4 +135,28 @@ test("redactHostAndUrls: blanks bare IPv4 addresses even when unknown", () => {
   assert.ok(!out.includes("192.168.1.50"))
   assert.ok(!out.includes("10.0.0.1"))
   assert.ok(out.includes("<redacted-ip>"))
+})
+
+// redactSecrets -----------------------------------------------------------
+
+test("redactSecrets: replaces an exact token value anywhere in the text", () => {
+  const out = redactSecrets("request failed for token tskey-api-abc123-def", ["tskey-api-abc123-def"])
+  assert.equal(out, "request failed for token <redacted>")
+})
+
+test("redactSecrets: ignores empty/undefined secrets, leaves text untouched", () => {
+  assert.equal(redactSecrets("nothing secret here", [undefined, null, "  "]), "nothing secret here")
+})
+
+test("redactSecrets: redacts every secret in the list", () => {
+  const out = redactSecrets("a=1 b=2", ["1", "2"])
+  assert.equal(out, "a=<redacted> b=<redacted>")
+})
+
+// scrubString: Tailscale key shape ----------------------------------------
+
+test("scrubString: redacts a bare tskey-… token outside any URL", () => {
+  const out = scrubString("import failed with key tskey-api-abc123XYZ_-9 in use")
+  assert.ok(!out.includes("tskey-api-abc123XYZ_-9"), "raw key must not survive")
+  assert.ok(out.includes("tskey-<redacted>"))
 })

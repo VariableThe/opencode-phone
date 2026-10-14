@@ -2,7 +2,7 @@ import { create } from "zustand"
 import * as SecureStore from "expo-secure-store"
 import * as Crypto from "expo-crypto"
 import type { ServerConnection, ConnectionType } from "../lib/types"
-import { createClient, probeServer, type Client, type Project } from "../lib/sdk"
+import { createClient, isAuthError, probeServer, type Client, type Project } from "../lib/sdk"
 import type { ServerApi } from "../lib/api-detect"
 import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, classifyConnectionError, track, type ConnectionTestSource } from "../lib/analytics"
@@ -11,8 +11,24 @@ import { stripTrailingSlash } from "../lib/path-utils"
 
 const CONNECTIONS_KEY = "opencode_connections"
 const PASSWORDS_PREFIX = "opencode_password_"
+const TAILSCALE_TOKEN_KEY = "opencode_tailscale_token"
 const RECENT_DIRS_KEY = "opencode_recent_dirs"
 const MAX_RECENT_DIRS = 10
+// Per-server reachability shown in the connections list. `unknown` = never
+// checked this session, `checking` = probe in flight. Determined by a single
+// GET /global/health per server via the shared sdk client (same endpoint the
+// connect flow tests) — a 401/403 means the server answered but rejected our
+// credentials, i.e. `auth-required`, not `unreachable`.
+export type ConnectionReachability = "unknown" | "checking" | "reachable" | "auth-required" | "unreachable"
+
+export interface ConnectionStatus {
+  state: ConnectionReachability
+  updatedAt: number
+}
+
+// Shorter than the interactive connect timeout: the list fans one probe out
+// per server and must not hang the pull-to-refresh on a dead host.
+const STATUS_PROBE_TIMEOUT_MS = 8_000
 // A bad IP (unreachable host, wrong port) otherwise hangs for the full 30s
 // general request timeout before the user sees a "connection failed" error —
 // a first-run bounce driver. The interactive connect flow can afford to fail
@@ -37,6 +53,8 @@ interface ConnectionsState {
   recentDirectories: string[]
   isLoading: boolean
   error: string | null
+  // Last reachability probe outcome per connection id. Absent = unknown.
+  statuses: Record<string, ConnectionStatus>
 
   // Actions
   loadConnections: () => Promise<void>
@@ -59,6 +77,16 @@ interface ConnectionsState {
   switchDirectory: (directory?: string) => Promise<void>
   // Record a directory as recently used
   addRecentDirectory: (directory: string) => Promise<void>
+  // Probe every saved connection's /global/health and record reachable /
+  // auth-required / unreachable per server. Deliberately untracked in
+  // analytics (a list refresh is not a funnel event) and never throws.
+  refreshStatuses: () => Promise<void>
+  // The user-pasted Tailscale API token is a tailnet-wide credential: it
+  // lives only in SecureStore, is never logged, and is persisted only when
+  // the user opts in on the import screen (otherwise it stays in memory).
+  saveTailscaleToken: (token: string) => Promise<void>
+  loadTailscaleToken: () => Promise<string | null>
+  clearTailscaleToken: () => Promise<void>
 }
 
 function generateId(): string {
@@ -106,6 +134,7 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
   recentDirectories: [],
   isLoading: true,
   error: null,
+  statuses: {},
 
   loadConnections: async () => {
     try {
@@ -157,6 +186,9 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
         serverHome: home,
         recentDirectories,
         isLoading: false,
+        statuses: Object.fromEntries(
+          Object.entries(get().statuses).filter(([id]) => connections.some((c) => c.id === id)),
+        ),
       })
     } catch (error) {
       set({ error: "Failed to load connections", isLoading: false })
@@ -219,6 +251,7 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
     // Remove stored password
     await SecureStore.deleteItemAsync(`${PASSWORDS_PREFIX}${id}`)
     await SecureStore.setItemAsync(CONNECTIONS_KEY, JSON.stringify(connections))
+    const { [id]: _dropped, ...statuses } = get().statuses
 
     // If removing active connection, clear client
     const wasActive = get().activeConnection?.id === id
@@ -233,12 +266,12 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
         const { api, resolved } = await resolveApi(newActive, auth)
         const built = buildClient(newActive.url, newActive.directory, auth, api)
         if (resolved) await SecureStore.setItemAsync(CONNECTIONS_KEY, JSON.stringify(connections))
-        set({ connections, activeConnection: newActive, client: built.client, clientBase: built.base })
+        set({ connections, activeConnection: newActive, client: built.client, clientBase: built.base, statuses })
       } else {
-        set({ connections, activeConnection: null, client: null, clientBase: null })
+        set({ connections, activeConnection: null, client: null, clientBase: null, statuses })
       }
     } else {
-      set({ connections })
+      set({ connections, statuses })
     }
   },
 
@@ -311,6 +344,45 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
       track(AnalyticsEvent.ConnectionFailed, { source, error_class: classifyConnectionError(message) })
       return { ok: false, error: message }
     }
+  },
+
+  refreshStatuses: async () => {
+    const connections = get().connections
+    if (connections.length === 0) return
+    const now = Date.now()
+    set((state) => ({
+      statuses: Object.fromEntries(
+        connections.map((c) => [c.id, state.statuses[c.id] ?? { state: "checking" as const, updatedAt: now }]),
+      ),
+    }))
+    const probes = connections.map(async (c) => {
+      const password = await SecureStore.getItemAsync(`${PASSWORDS_PREFIX}${c.id}`).catch(() => null)
+      const client = createClient({ baseUrl: c.url, auth: buildAuth(c.username, password) })
+      try {
+        await client.global.health(STATUS_PROBE_TIMEOUT_MS)
+        return { id: c.id, state: "reachable" as const }
+      } catch (error) {
+        return { id: c.id, state: isAuthError(error) ? ("auth-required" as const) : ("unreachable" as const) }
+      }
+    })
+    const results = await Promise.all(probes)
+    const stamped = Date.now()
+    set((state) => ({
+      statuses: {
+        ...state.statuses,
+        ...Object.fromEntries(results.map((r) => [r.id, { state: r.state, updatedAt: stamped }])),
+      },
+    }))
+  },
+
+  saveTailscaleToken: async (token) => {
+    await SecureStore.setItemAsync(TAILSCALE_TOKEN_KEY, token)
+  },
+
+  loadTailscaleToken: async () => SecureStore.getItemAsync(TAILSCALE_TOKEN_KEY),
+
+  clearTailscaleToken: async () => {
+    await SecureStore.deleteItemAsync(TAILSCALE_TOKEN_KEY)
   },
 
   updateConnection: async (id, updates, password) => {

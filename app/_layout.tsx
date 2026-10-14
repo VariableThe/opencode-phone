@@ -228,6 +228,20 @@ function RootLayout() {
                   presentation: "modal",
                 }}
               />
+              <Stack.Screen
+                name="connection/tailscale-import"
+                options={{
+                  title: t("nav.tailscaleImportTitle"),
+                  presentation: "modal",
+                }}
+              />
+              <Stack.Screen
+                name="terminals"
+                options={{
+                  title: "Terminals",
+                  presentation: "card",
+                }}
+              />
             </Stack>
               <StatusBar style={isDark ? "light" : "dark"} />
             </AuthGate>

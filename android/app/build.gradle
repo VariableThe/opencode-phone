@@ -20,6 +20,12 @@ react {
     cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
     bundleCommand = "export:embed"
 
+    // TEMP-DEBUG-STANDALONE (reversible): bundle JS into the debug APK so it
+    // runs without a Metro dev server. Default debuggableVariants
+    // (['debug','debugOptimized']) skips the createBundleDebugJsAndAssets task.
+    // Remove this line to restore stock dev behavior (JS from Metro).
+    debuggableVariants = []
+
     /* Folders */
      //   The root of your project, i.e. where "package.json" lives. Default is '../..'
     // root = file("../../")

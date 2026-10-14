@@ -13,6 +13,18 @@ export interface ServerConnection {
   // Password stored separately in SecureStore
   // Directory to use for this connection
   directory?: string
+  // oc-phone-bridge sidecar (tmux sessions + pane preview) for this host.
+  // All optional and additive: connections saved before these fields
+  // existed parse with them as undefined and keep working untouched.
+  // bridgeUrl/bridgeToken point at the sidecar's HTTP API (Bearer token,
+  // >= 32 chars); defaultProjectDir pre-fills the new-tmux-session form.
+  // NOTE: the whole connections list (including bridgeToken) is stored in
+  // SecureStore under CONNECTIONS_KEY — the same mechanism as the opencode
+  // passwords (per-connection opencode_password_<id> keys) — so no extra
+  // storage key was needed.
+  bridgeUrl?: string
+  bridgeToken?: string
+  defaultProjectDir?: string
   // When last successfully connected
   lastConnected?: number
   // Is this the active connection?

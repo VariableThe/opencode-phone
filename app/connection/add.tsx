@@ -18,7 +18,7 @@ import { useConnections } from "../../src/stores/connections"
 import type { ConnectionType } from "../../src/lib/types"
 import { probeConnection, shareReport } from "../../src/lib/diagnostics"
 import { captureDiagnostic } from "../../src/lib/sentry"
-import { parseUrl } from "../../src/lib/diagnostics-classify"
+import { normalizeServerHost, normalizeServerUrl } from "../../src/lib/server-host"
 import { buildAuth } from "../../src/lib/auth"
 import { AnalyticsEvent, track } from "../../src/lib/analytics"
 import { submitWaitlistSignup, buildWaitlistMailtoUrl, needsManualEscapeHatch, type QueuedSignup } from "../../src/lib/waitlist"
@@ -78,25 +78,10 @@ export default function AddConnectionScreen() {
 
   const buildUrl = () => {
     if (mode === "advanced") return url.trim()
-    const raw = ip.trim()
-    if (!raw) return ""
-    // Be forgiving about pasted values: a full URL, a host:port, or a
-    // host with a trailing path. Extract scheme, host, and port so we
-    // never produce "http://http://host:4096:4096".
-    const schemeMatch = raw.match(/^(https?):\/\//i)
-    const scheme = schemeMatch ? schemeMatch[1].toLowerCase() : "http"
-    let rest = raw.replace(/^https?:\/\//i, "")
-    rest = rest.split("/")[0] // drop any path/query
-    let host = rest
-    let pastedPort = ""
-    const lastColon = rest.lastIndexOf(":")
-    // Only treat trailing ":NNNN" as a port (ignore IPv6 colons / bare host)
-    if (lastColon > -1 && /^\d+$/.test(rest.slice(lastColon + 1))) {
-      host = rest.slice(0, lastColon)
-      pastedPort = rest.slice(lastColon + 1)
-    }
-    const finalPort = pastedPort || port.trim() || "4096"
-    return `${scheme}://${host}:${finalPort}`
+    // Bare MagicDNS names and 100.x addresses normalize to http://host:port
+    // here (same helper the edit screen uses) so quick connect accepts
+    // hostnames, not just IPs.
+    return normalizeServerHost(ip.trim(), port.trim() || "4096") ?? ""
   }
 
   const handleQuickConnect = async () => {
@@ -174,11 +159,14 @@ export default function AddConnectionScreen() {
       Alert.alert(t("common.error"), t("connection.shared.alerts.enterName"))
       return
     }
+    // Bare MagicDNS / 100.x hosts upgrade to http://host:4096; full URLs
+    // pass through. Null means not an address at all.
+    const normalized = normalizeServerUrl(url)
     if (!url.trim()) {
       Alert.alert(t("common.error"), t("connection.shared.alerts.enterUrl"))
       return
     }
-    if (!parseUrl(url).valid) {
+    if (!normalized) {
       Alert.alert(t("connection.shared.alerts.invalidUrlTitle"), t("connection.shared.alerts.invalidUrlMessage"))
       return
     }
@@ -196,7 +184,7 @@ export default function AddConnectionScreen() {
         id: "",
         name: name.trim(),
         type,
-        url: url.trim(),
+        url: normalized,
         directory: directory.trim() || undefined,
         username: username.trim() || undefined,
       },
@@ -210,7 +198,7 @@ export default function AddConnectionScreen() {
           {
             name: name.trim(),
             type,
-            url: url.trim(),
+            url: normalized,
             directory: directory.trim() || undefined,
             username: username.trim() || undefined,
             api: result.api,
@@ -233,14 +221,14 @@ export default function AddConnectionScreen() {
     // Failed: same "Connection Failed" alert as Quick Connect — run active
     // diagnostics, capture to Sentry, and offer a shareable report instead of
     // silently persisting an unreachable/unauthorized connection.
-    const report = await probeConnection(url.trim(), buildAuth(username, password))
+    const report = await probeConnection(normalized, buildAuth(username, password))
     captureDiagnostic(report)
     setIsConnecting(false)
     Alert.alert(
       t("connection.shared.alerts.connectionFailedTitle"),
       t("connection.add.alerts.connectionFailedMessage", {
         summary: report.summary,
-        target: url.trim(),
+        target: normalized,
         error: result.error || t("connection.shared.alerts.unknownError"),
       }),
       [

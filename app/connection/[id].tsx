@@ -18,7 +18,7 @@ import { useEvents } from "../../src/stores/events"
 import type { ConnectionType } from "../../src/lib/types"
 import { probeConnection, shareReport } from "../../src/lib/diagnostics"
 import { captureDiagnostic } from "../../src/lib/sentry"
-import { parseUrl } from "../../src/lib/diagnostics-classify"
+import { normalizeServerUrl } from "../../src/lib/server-host"
 import { buildAuth } from "../../src/lib/auth"
 
 // labelKey (not literal text): this is a module-level constant evaluated
@@ -50,6 +50,9 @@ export default function EditConnectionScreen() {
   const [directory, setDirectory] = useState(connection?.directory || "")
   const [username, setUsername] = useState(connection?.username || "")
   const [password, setPassword] = useState("")
+  const [bridgeUrl, setBridgeUrl] = useState(connection?.bridgeUrl || "")
+  const [bridgeToken, setBridgeToken] = useState(connection?.bridgeToken || "")
+  const [defaultProjectDir, setDefaultProjectDir] = useState(connection?.defaultProjectDir || "")
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -60,6 +63,9 @@ export default function EditConnectionScreen() {
       setUrl(connection.url)
       setDirectory(connection.directory || "")
       setUsername(connection.username || "")
+      setBridgeUrl(connection.bridgeUrl || "")
+      setBridgeToken(connection.bridgeToken || "")
+      setDefaultProjectDir(connection.defaultProjectDir || "")
     }
   }, [connection])
 
@@ -72,11 +78,14 @@ export default function EditConnectionScreen() {
   }
 
   const handleTest = async () => {
+    // Bare MagicDNS / 100.x hosts upgrade to http://host:4096; full URLs
+    // pass through. Null means not an address at all.
+    const normalized = normalizeServerUrl(url)
     if (!url.trim()) {
       Alert.alert(t("common.error"), t("connection.shared.alerts.enterUrl"))
       return
     }
-    if (!parseUrl(url).valid) {
+    if (!normalized) {
       Alert.alert(t("connection.shared.alerts.invalidUrlTitle"), t("connection.shared.alerts.invalidUrlMessage"))
       return
     }
@@ -87,7 +96,7 @@ export default function EditConnectionScreen() {
         id: connection.id,
         name: name || "Test",
         type,
-        url: url.trim(),
+        url: normalized,
         directory: directory.trim() || undefined,
         username: username.trim() || undefined,
       },
@@ -102,7 +111,7 @@ export default function EditConnectionScreen() {
     }
 
     // Failed: run active diagnostics, capture to Sentry, offer a shareable report.
-    const report = await probeConnection(url.trim(), buildAuth(username, password))
+    const report = await probeConnection(normalized, buildAuth(username, password))
     captureDiagnostic(report)
     setIsTesting(false)
 
@@ -124,11 +133,8 @@ export default function EditConnectionScreen() {
       Alert.alert(t("common.error"), t("connection.shared.alerts.enterName"))
       return
     }
-    if (!url.trim()) {
-      Alert.alert(t("common.error"), t("connection.shared.alerts.enterUrl"))
-      return
-    }
-    if (!parseUrl(url).valid) {
+    const normalized = normalizeServerUrl(url)
+    if (!normalized) {
       Alert.alert(t("connection.shared.alerts.invalidUrlTitle"), t("connection.shared.alerts.invalidUrlMessage"))
       return
     }
@@ -140,9 +146,12 @@ export default function EditConnectionScreen() {
         {
           name: name.trim(),
           type,
-          url: url.trim(),
+          url: normalized,
           directory: directory.trim() || undefined,
           username: username.trim() || undefined,
+          bridgeUrl: bridgeUrl.trim() || undefined,
+          bridgeToken: bridgeToken.trim() || undefined,
+          defaultProjectDir: defaultProjectDir.trim() || undefined,
         },
         // Empty = keep existing password (the field loads blank); a typed value
         // rotates it in SecureStore.
@@ -277,6 +286,45 @@ export default function EditConnectionScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+      />
+
+      {/* oc-phone-bridge sidecar (tmux sessions + pane preview). All fields
+          optional — an unconfigured bridge simply hides the Terminals entry. */}
+      <Text style={[styles.sectionTitle, isDark && styles.textDark]}>Phone Bridge (tmux)</Text>
+
+      <Text style={[styles.label, isDark && styles.labelDark]}>Bridge URL</Text>
+      <TextInput
+        style={[styles.input, isDark && styles.inputDark]}
+        placeholder="http://100.64.12.34:8787"
+        placeholderTextColor={isDark ? "#666666" : "#999999"}
+        value={bridgeUrl}
+        onChangeText={setBridgeUrl}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+
+      <Text style={[styles.label, isDark && styles.labelDark]}>Bridge token</Text>
+      <TextInput
+        style={[styles.input, isDark && styles.inputDark]}
+        placeholder="OC_BRIDGE_TOKEN from the workstation"
+        placeholderTextColor={isDark ? "#666666" : "#999999"}
+        value={bridgeToken}
+        onChangeText={setBridgeToken}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+      />
+
+      <Text style={[styles.label, isDark && styles.labelDark]}>Default project dir (optional)</Text>
+      <TextInput
+        style={[styles.input, isDark && styles.inputDark]}
+        placeholder="/home/user/project"
+        placeholderTextColor={isDark ? "#666666" : "#999999"}
+        value={defaultProjectDir}
+        onChangeText={setDefaultProjectDir}
+        autoCapitalize="none"
+        autoCorrect={false}
       />
 
       {/* Actions */}

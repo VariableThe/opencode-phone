@@ -1,17 +1,44 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, useColorScheme, Alert } from "react-native"
-import { router } from "expo-router"
+import { useCallback, useState } from "react"
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  useColorScheme,
+  Alert,
+  RefreshControl,
+} from "react-native"
+import { router, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
-import { useConnections } from "../../src/stores/connections"
+import { useConnections, type ConnectionReachability } from "../../src/stores/connections"
 import { useSettings } from "../../src/stores/settings"
 import type { ServerConnection } from "../../src/lib/types"
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200] as const
 
+const STATUS_DOT: Record<ConnectionReachability, string> = {
+  reachable: "#22c55e",
+  "auth-required": "#f59e0b",
+  unreachable: "#ef4444",
+  checking: "#888888",
+  unknown: "#cccccc",
+}
+
+const STATUS_LABEL_KEY: Record<ConnectionReachability, string> = {
+  reachable: "connectionsList.status.reachable",
+  "auth-required": "connectionsList.status.authRequired",
+  unreachable: "connectionsList.status.unreachable",
+  checking: "connectionsList.status.checking",
+  unknown: "connectionsList.status.unknown",
+}
+
 function ConnectionItem({
   connection,
   isDark,
   isActive,
+  status,
   onSelect,
   onEdit,
   onDelete,
@@ -19,6 +46,7 @@ function ConnectionItem({
   connection: ServerConnection
   isDark: boolean
   isActive: boolean
+  status: ConnectionReachability
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
@@ -74,6 +102,10 @@ function ConnectionItem({
         >
           {connection.url}
         </Text>
+        <View style={styles.statusRow}>
+          <View style={[styles.statusDot, { backgroundColor: STATUS_DOT[status] }]} />
+          <Text style={[styles.statusText, isDark && styles.metaDark]}>{t(STATUS_LABEL_KEY[status])}</Text>
+        </View>
         {connection.lastConnected && (
           <Text style={[styles.connectionMeta, isDark && styles.metaDark]}>
             {t("connectionsList.lastConnected", { date: new Date(connection.lastConnected).toLocaleDateString() })}
@@ -92,8 +124,27 @@ export default function ConnectionsScreen() {
   const isDark = colorScheme === "dark"
   const { t } = useTranslation()
 
-  const { connections, activeConnection, setActiveConnection, removeConnection } = useConnections()
+  const { connections, activeConnection, setActiveConnection, removeConnection, statuses, refreshStatuses } =
+    useConnections()
   const { pageSize, setPageSize } = useSettings()
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Reachability refreshes on every focus (and pull-to-refresh below) so the
+  // list shows all connected servers/devices with a live status.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshStatuses()
+    }, [refreshStatuses]),
+  )
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await refreshStatuses()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refreshStatuses])
 
   const handleDelete = (connection: ServerConnection) => {
     Alert.alert(
@@ -115,11 +166,15 @@ export default function ConnectionsScreen() {
       <FlatList
         data={connections}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#ffffff" : "#0a0a0a"} />
+        }
         renderItem={({ item }) => (
           <ConnectionItem
             connection={item}
             isDark={isDark}
             isActive={activeConnection?.id === item.id}
+            status={statuses[item.id]?.state ?? "unknown"}
             onSelect={() => setActiveConnection(item.id)}
             onEdit={() => router.push(`/connection/${item.id}`)}
             onDelete={() => handleDelete(item)}
@@ -135,8 +190,18 @@ export default function ConnectionsScreen() {
           </View>
         }
         ListHeaderComponent={
-          <View style={[styles.header, isDark && styles.headerDark]}>
-            <Text style={[styles.headerText, isDark && styles.metaDark]}>{t("connectionsList.header")}</Text>
+          <View>
+            <View style={[styles.header, isDark && styles.headerDark]}>
+              <Text style={[styles.headerText, isDark && styles.metaDark]}>{t("connectionsList.header")}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.importRow, isDark && styles.importRowDark]}
+              onPress={() => router.push("/connection/tailscale-import")}
+            >
+              <Ionicons name="download-outline" size={18} color={isDark ? "#888888" : "#666666"} />
+              <Text style={[styles.importText, isDark && styles.textDark]}>{t("connectionsList.importButton")}</Text>
+              <Ionicons name="chevron-forward" size={16} color={isDark ? "#666666" : "#999999"} />
+            </TouchableOpacity>
           </View>
         }
         ListFooterComponent={
@@ -288,6 +353,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#999999",
     marginTop: 4,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: "#999999",
+  },
+  importRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e5e5",
+  },
+  importRowDark: {
+    borderBottomColor: "#1a1a1a",
+  },
+  importText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#0a0a0a",
   },
   metaDark: {
     color: "#888888",

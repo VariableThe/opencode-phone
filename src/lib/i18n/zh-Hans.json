@@ -157,7 +157,7 @@
         "enterName": "请输入连接名称",
         "enterUrl": "请输入服务器地址",
         "invalidUrlTitle": "地址无效",
-        "invalidUrlMessage": "请输入包含 http:// 或 https:// 的完整地址，例如 http://192.168.1.100:4096",
+        "invalidUrlMessage": "请输入服务器地址 —— 192.168.1.100、my-mac.tailnet.ts.net，或完整地址如 http://192.168.1.100:4096",
         "connectionFailedTitle": "连接失败",
         "unknownError": "未知错误",
         "saveFailedTitle": "无法保存连接",
@@ -168,7 +168,7 @@
       "quick": {
         "title": "连接到 OpenCode",
         "subtitle": "输入您电脑的 IP 地址进行连接",
-        "ipAddressLabel": "IP 地址",
+        "ipAddressLabel": "IP 地址或主机名",
         "nameOptionalLabel": "名称（可选）",
         "namePlaceholder": "我的 Mac",
         "passwordIfSetLabel": "密码（如服务器已设置）",
@@ -236,11 +236,20 @@
     "connectionsTab": "连接",
     "settingsTab": "设置",
     "addConnectionTitle": "添加连接",
-    "editConnectionTitle": "编辑连接"
+    "editConnectionTitle": "编辑连接",
+    "tailscaleImportTitle": "从 Tailscale 导入"
   },
   "connectionsList": {
     "activeBadge": "当前使用",
     "lastConnected": "上次连接：{{date}}",
+    "importButton": "从 Tailscale 导入",
+    "status": {
+      "reachable": "可连接",
+      "authRequired": "需要登录",
+      "unreachable": "无法连接",
+      "checking": "检查中…",
+      "unknown": "未检查"
+    },
     "actionsAlert": {
       "message": "您想执行什么操作？",
       "edit": "编辑"
@@ -448,6 +457,32 @@
         "daysAgo": "{{count}} 天前"
       }
     }
+  },
+  "tailscaleImport": {
+    "subtitle": "粘贴 Tailscale API 密钥以列出您 tailnet 中的设备，然后选择哪些设备运行 opencode 服务器。",
+    "tokenLabel": "API 密钥",
+    "tokenPlaceholder": "tskey-api-…",
+    "rememberLabel": "在此设备上记住该密钥",
+    "rememberHint": "该密钥可管理您的整个 tailnet。关闭则每次都需要粘贴。",
+    "loadButton": "列出设备",
+    "loadingDevices": "正在加载设备…",
+    "enterToken": "请先粘贴 API 密钥。",
+    "errors": {
+      "unauthorized": "该密钥被拒绝（HTTP {{status}}）。请检查密钥后重试。",
+      "network": "无法连接到 Tailscale API。请检查网络连接后重试。",
+      "unexpected": "Tailscale API 返回了意外响应（HTTP {{status}}）。请稍后重试。",
+      "empty": "在此 tailnet 中未找到任何设备。"
+    },
+    "device": {
+      "offline": "离线？",
+      "lastSeenUnknown": "上次在线时间未知",
+      "alreadyAdded": "已添加"
+    },
+    "selectedCount": "已选 {{count}} 台",
+    "importButton": "导入 {{count}} 台",
+    "noSelection": "请先至少选择一台设备。",
+    "doneTitle": "导入完成",
+    "doneMessage": "已导入 {{imported}} 台，跳过 {{skipped}} 台已添加的。"
   },
   "demo": {
     "title": "演示",

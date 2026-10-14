@@ -540,7 +540,16 @@ export default function SessionsScreen() {
             </>
           )}
         </View>
-        <Ionicons name="swap-horizontal-outline" size={16} color={isDark ? "#666666" : "#999999"} />
+        <View style={styles.connectionActions}>
+          <TouchableOpacity
+            onPress={() => router.push("/terminals")}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            testID="terminals-button"
+          >
+            <Ionicons name="terminal-outline" size={18} color={isDark ? "#666666" : "#999999"} />
+          </TouchableOpacity>
+          <Ionicons name="swap-horizontal-outline" size={16} color={isDark ? "#666666" : "#999999"} />
+        </View>
       </TouchableOpacity>
 
       {error && (
@@ -909,6 +918,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  connectionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
   },
   connectionName: {
     fontSize: 14,
