@@ -263,6 +263,52 @@ test("inbox enqueue resolves the optimistic temp message with a real user messag
   assert.deepEqual([queueMark.sessionID, queueMark.inboxID, queueMark.text], ["s1", "msg_u1", "hello"])
 })
 
+test("inbox enqueue threads the server delivery mode for the queue gate", () => {
+  // Keyed on `Session.Inbox.User.delivery` (required "steer"|"queue" in the
+  // 2.0.29 OpenAPI): only "queue" entries are genuinely waiting — an idle
+  // send is admitted "steer" and delivered immediately, so the store must
+  // not show it queued.
+  const t = new V2EventTranslator()
+  const queued = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u1",
+      item: { type: "user", delivery: "queue", payload: { text: "wait" } },
+    }),
+  )
+  const queueMark = queued[queued.length - 1]
+  assert.equal(queueMark.type, "inbox.enqueued")
+  assert.equal((queueMark.properties as { delivery?: string }).delivery, "queue")
+
+  const immediate = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u2",
+      item: { type: "user", delivery: "steer", payload: { text: "now" } },
+    }),
+  )
+  const steerMark = immediate[immediate.length - 1]
+  assert.equal(steerMark.type, "inbox.enqueued")
+  assert.equal((steerMark.properties as { delivery?: string }).delivery, "steer")
+})
+
+test("inbox enqueue without a delivery mode emits no delivery key", () => {
+  // Older/drifted servers may omit the mode — the store treats a missing
+  // mode as queued (never lose the cancel affordance), so the translator
+  // must leave the key absent rather than invent one.
+  const t = new V2EventTranslator()
+  const out = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u1",
+      item: { type: "user", payload: { text: "hello" } },
+    }),
+  )
+  const mark = out[out.length - 1]
+  assert.equal(mark.type, "inbox.enqueued")
+  assert.ok(!("delivery" in mark.properties))
+})
+
 test("permission and form events feed the pending registry and the prompt UI shapes", () => {
   const t = new V2EventTranslator()
   const perm = t.translate(

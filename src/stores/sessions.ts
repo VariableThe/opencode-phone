@@ -5,7 +5,7 @@ import { useSettings } from "./settings"
 import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, track } from "../lib/analytics"
 import { extractPromptFromParts, type PromptFromParts } from "../lib/prompt-from-parts"
-import { mergeIncomingMessage } from "../lib/message-merge"
+import { mergeIncomingMessage, mergeIncomingPart, reconcileOptimisticParts, swapOptimisticId, mergeHistoryWithPending } from "../lib/message-merge"
 import { removeQueued, upsertQueued } from "../lib/composer-queue"
 import { isColdSessionLoad, isLiveEventForSession } from "../lib/session-load-reconcile"
 
@@ -218,10 +218,15 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const response = await client.session.messages(session.id)
       const { messages: all, parts: allParts } = parseMessages(response)
 
-      // Merge: use all messages from full fetch, but keep any temp/optimistic messages
+      // Merge: the server list wins, but keep still-pending optimistic
+      // messages (a POST whose receipt hasn't landed yet) so a just-sent
+      // message doesn't vanish mid-history-load. mergeHistoryWithPending
+      // also dedupes the server list by id — the receipt swap
+      // (swapOptimisticId) then drops the temp when the real id is already
+      // here instead of renaming it into a duplicate pair.
       const existing = get().messages
       const temp = existing.filter((m) => m.id.startsWith("temp-"))
-      const merged = [...all, ...temp]
+      const merged = mergeHistoryWithPending(all, temp)
 
       set({
         messages: merged,
@@ -369,11 +374,29 @@ export const useSessions = create<SessionsState>((set, get) => ({
       if (realID && realID !== userMessage.id) {
         set((state) => {
           if (state.currentSession?.id !== session.id) return {}
-          const idx = state.messages.findIndex((m) => m.id === userMessage.id)
-          const messages = idx === -1 ? state.messages : state.messages.map((m) => (m.id === userMessage.id ? { ...m, id: realID } : m))
+          // A history fetch that landed mid-POST already holds the real id
+          // next to the temp entry — drop the temp instead of renaming it
+          // into a second same-id entry (swapOptimisticId).
+          const messages = swapOptimisticId(state.messages, userMessage.id, realID)
           const parts = { ...state.parts }
           if (parts[userMessage.id]) {
-            parts[realID] = parts[userMessage.id].map((p) => ({ ...p, messageID: realID }))
+            // Rename the optimistic parts to the canonical echo ids at the
+            // same time as the message-id swap, so the server echo
+            // (inbox.enqueued fan-out) replaces them in place instead of
+            // appending second copies (see reconcileOptimisticParts).
+            const reconciled = reconcileOptimisticParts(parts[userMessage.id], realID)
+            const serverParts = parts[realID]
+            if (serverParts) {
+              // The server copy already has parts (mid-POST history fetch
+              // or an echo that beat the receipt): fold the optimistic
+              // parts underneath them by id so the server content keeps
+              // authority and nothing renders twice.
+              let base = reconciled
+              for (const p of serverParts) base = mergeIncomingPart(base, p)
+              parts[realID] = base
+            } else {
+              parts[realID] = reconciled
+            }
             delete parts[userMessage.id]
           }
           const sessionQueued = state.queued[session.id] || []
@@ -556,13 +579,10 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
         set((state) => {
           const messageParts = state.parts[part.messageID] || []
-          const exists = messageParts.some((p) => p.id === part.id)
           return {
             parts: {
               ...state.parts,
-              [part.messageID]: exists
-                ? messageParts.map((p) => (p.id === part.id ? part : p))
-                : [...messageParts, part],
+              [part.messageID]: mergeIncomingPart(messageParts, part),
             },
             // See message.updated above — a live part update is just as
             // much proof of life as a message update.
@@ -589,6 +609,14 @@ export const useSessions = create<SessionsState>((set, get) => ({
         const inboxID = props.inboxID as string
         const inboxSessionID = props.sessionID as string
         if (!inboxID || !isLiveEventForSession(inboxSessionID, currentSession.id)) return
+        // Only a genuinely-waiting ("queue") entry gets the pending
+        // affordance. An idle send is admitted with delivery "steer" and
+        // delivered immediately — marking it queued flashes a bogus pending
+        // state (and turns Edit into cancel-and-resend) until
+        // `inbox.delivered` lands a moment later. Shapes without a delivery
+        // mode keep the old mark-everything behaviour so a truly queued
+        // message never loses its cancel affordance.
+        if ((props.delivery as string | undefined) === "steer") return
         set((state) => ({
           queued: { ...state.queued, [currentSession.id]: upsertQueued(state.queued[currentSession.id] || [], inboxID) },
         }))

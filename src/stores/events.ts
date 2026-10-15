@@ -371,6 +371,19 @@ export const useEvents = create<EventsState>((set, get) => ({
               break
             }
 
+            case "message.removed": {
+              // Remote cancel of a queued message (`session.inbox.cancelled`
+              // from another client, e.g. the TUI): drop the local
+              // bubble/queued entry. sessions.handleEvent already handles
+              // this type — it just was never routed here, so the stale
+              // bubble survived until the next full refresh.
+              const removedID = props.messageID as string | undefined
+              const removedSessionID = props.sessionID as string | undefined
+              if (!removedID) break
+              useSessions.getState().handleEvent({ type, properties: { sessionID: removedSessionID, messageID: removedID } } as any)
+              break
+            }
+
             case "session.updated": {
               const info = props.info as Session | undefined
               if (!info) break

@@ -246,7 +246,7 @@ function attachmentUrl(f: V2FileAttachment): string {
   return ""
 }
 
-function userParts(messageID: string, msg: { text?: string; files?: V2FileAttachment[] }): Part[] {
+export function userParts(messageID: string, msg: { text?: string; files?: V2FileAttachment[] }): Part[] {
   const parts: Part[] = []
   if (msg.text) {
     parts.push({ id: `${messageID}-text`, messageID, type: "text", text: msg.text })
@@ -785,8 +785,14 @@ export class V2EventTranslator {
         }
         // Companion event so the chat store can track the pending queue
         // separately from the transcript: delivered/cancelled remove the id.
+        // Thread the server's delivery mode through: only a "queue" entry is
+        // genuinely waiting (see the sessions store gate). The mode lives on
+        // the inbox item itself (`Session.Inbox.User.delivery`, required in
+        // the 2.0.29 OpenAPI); fall back to a top-level field if present.
         const text = typeof payload.text === "string" ? payload.text : ""
-        out.push(ev("inbox.enqueued", { sessionID, inboxID: d.inboxID, text }))
+        const rawDelivery = (item.delivery ?? d.delivery) as unknown
+        const delivery = typeof rawDelivery === "string" ? rawDelivery : undefined
+        out.push(ev("inbox.enqueued", { sessionID, inboxID: d.inboxID, text, ...(delivery ? { delivery } : {}) }))
         return out
       }
 
