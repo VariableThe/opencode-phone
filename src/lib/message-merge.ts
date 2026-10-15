@@ -1,4 +1,4 @@
-import type { Message, Part } from "./sdk"
+import type { InboxEntry, Message, Part } from "./sdk"
 
 /**
  * Merge a server `message.updated` event into the current message list.
@@ -85,11 +85,14 @@ export function mergeIncomingPart(existing: Part[], part: Part): Part[] {
  * Merge a full server history fetch with the local message list for
  * `loadOlderMessages` (see sessions.ts).
  *
- * The server list wins wholesale, but still-pending optimistic `temp-`
- * messages (a POST whose receipt hasn't landed yet) are carried over so the
- * user's just-sent text doesn't vanish while history loads. Server entries
- * are deduplicated by id, keeping the first occurrence, so a repeated id in
- * the fetch can never seed a duplicate pair.
+ * The server list wins wholesale, but still-pending local messages are
+ * carried over so a just-sent (or cold-start-rebuilt queued) message doesn't
+ * vanish while history loads: `temp-` optimistic sends whose receipt hasn't
+ * landed yet, plus still-queued inbox entries the seeder rebuilt below. The
+ * caller pre-filters which local messages count as pending; anything passed
+ * that the server already lists is deduplicated by id, keeping the first
+ * (server) occurrence, so a repeated id in the fetch can never seed a
+ * duplicate pair.
  *
  * This deliberately cannot resolve a `temp-` entry against its future real
  * id — the link only exists once the POST receipt lands — so the receipt
@@ -105,7 +108,6 @@ export function mergeHistoryWithPending(server: Message[], existing: Message[]):
     out.push(m)
   }
   for (const m of existing) {
-    if (!m.id.startsWith("temp-")) continue
     if (seen.has(m.id)) continue
     seen.add(m.id)
     out.push(m)

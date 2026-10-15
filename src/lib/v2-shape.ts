@@ -5,7 +5,7 @@
 // unit-testable under plain `node --test` and keeps sdk.ts thin.
 //
 // Reference: docs/v2-api-map.md (verified against a live opencode v2 server).
-import type { Agent, Command, Event, FileEntry, Message, MessageWithParts, Part, Project, Session } from "./sdk"
+import type { Agent, Command, Event, FileEntry, InboxEntry, Message, MessageWithParts, Part, Project, Session } from "./sdk"
 
 // --- raw v2 shapes (subset we consume) ---
 
@@ -257,6 +257,49 @@ export function userParts(messageID: string, msg: { text?: string; files?: V2Fil
     parts.push({ id: `${messageID}-file-${parts.length}`, messageID, type: "file", mime: f.mime, url, filename: f.name })
   }
   return parts
+}
+
+/**
+ * Rebuild transcript bubbles for still-queued inbox entries on a cold start
+ * (see sessions.ts selectSession).
+ *
+ * A queued message exists only in the server's inbox, never in message
+ * history — and the optimistic local copy died with the process. Seeding
+ * just the queued ids would track the entries invisibly: no bubble renders
+ * and the cancel affordance has nothing to attach to. So every entry whose
+ * id is absent from the current transcript gets a synthesized user message
+ * with parts built by `userParts` above — the exact builder (and part-id
+ * scheme) the live `session.inbox.enqueued` fan-out uses, so the later
+ * delivery echo (`message.updated` + parts, matched by id) replaces the
+ * rebuilt parts in place instead of appending duplicates, and
+ * `inbox.delivered` only drops the queue mark while the bubble stays as a
+ * normal message.
+ *
+ * Entries already present (delivered between the history fetch and the inbox
+ * fetch, or re-seeded) are never duplicated — their ids are still reported
+ * so the caller keeps the pending mark while the server holds them. An
+ * empty inbox returns the inputs untouched: no phantom bubbles.
+ */
+export function seedQueuedMessages(
+  messages: Message[],
+  parts: Record<string, Part[]>,
+  sessionID: string,
+  entries: InboxEntry[],
+): { messages: Message[]; parts: Record<string, Part[]>; ids: string[] } {
+  const seen = new Set(messages.map((m) => m.id))
+  const ids: string[] = []
+  let next = messages
+  let nextParts: Record<string, Part[]> | null = null
+  for (const e of entries || []) {
+    if (!e?.id || ids.includes(e.id)) continue
+    ids.push(e.id)
+    if (seen.has(e.id)) continue
+    seen.add(e.id)
+    next = [...next, { id: e.id, sessionID, role: "user", time: { created: e.time ?? Date.now() } }]
+    if (!nextParts) nextParts = { ...parts }
+    nextParts[e.id] = userParts(e.id, { text: e.text, files: e.files })
+  }
+  return { messages: next, parts: nextParts ?? parts, ids }
 }
 
 function toolOutput(content: V2ToolContent[] | undefined): string | undefined {

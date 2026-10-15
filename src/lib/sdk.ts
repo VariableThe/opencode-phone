@@ -235,6 +235,26 @@ export interface Event {
   properties: Record<string, unknown>
 }
 
+// A pending follow-up the server holds in a session's inbox while the
+// session is busy (v2 only). The id doubles as the user-message id once
+// delivered; the payload carries the queued text + attachments so a cold
+// start can rebuild the transcript bubble (see seedQueuedMessages).
+export interface InboxEntry {
+  id: string
+  text: string
+  delivery: string
+  sessionID?: string
+  type?: string
+  time?: number
+  files?: Array<{
+    data?: string
+    mime?: string
+    uri?: string
+    name?: string
+    source?: { type: string; path?: string }
+  }>
+}
+
 export interface HealthResponse {
   healthy: boolean
   version: string
@@ -749,12 +769,31 @@ function createV2Client(config: ClientConfig) {
 
       // Queued-message inbox (v2 only — v1 servers have no inbox API and the
       // v1 client does not implement these; callers must guard). Entries are
-      // pending follow-ups the server holds while the session is busy.
-      inbox: async (sessionID: string): Promise<Array<{ id: string; text: string; delivery: string }>> => {
+      // pending follow-ups the server holds while the session is busy. The
+      // payload (text + files) and enqueue time travel along so a cold start
+      // can rebuild the transcript bubble for each entry (see
+      // seedQueuedMessages) — the inbox is the only place queued messages
+      // exist before delivery.
+      inbox: async (sessionID: string): Promise<InboxEntry[]> => {
         const body = await request<{
-          data: Array<{ id: string; payload?: { text?: string }; delivery?: string }>
+          data: Array<{
+            id: string
+            sessionID?: string
+            time?: { created?: number }
+            type?: string
+            payload?: { text?: string; files?: InboxEntry["files"] }
+            delivery?: string
+          }>
         }>(config, `/api/session/${sessionID}/inbox`)
-        return (body.data || []).map((e) => ({ id: e.id, text: e.payload?.text ?? "", delivery: e.delivery ?? "" }))
+        return (body.data || []).map((e) => ({
+          id: e.id,
+          text: e.payload?.text ?? "",
+          delivery: e.delivery ?? "",
+          ...(e.sessionID ? { sessionID: e.sessionID } : {}),
+          ...(e.type ? { type: e.type } : {}),
+          ...(e.time?.created !== undefined ? { time: e.time.created } : {}),
+          ...(e.payload?.files ? { files: e.payload.files } : {}),
+        }))
       },
 
       // Cancel a queued message. 204 on success; throws ApiError otherwise.

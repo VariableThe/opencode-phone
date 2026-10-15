@@ -49,3 +49,38 @@ test("the POST receipt swap collapses the temp when the real id is present", () 
     "the unconditional rename that left two same-id entries is gone",
   )
 })
+
+// Cold start: queued entries live only in the server inbox, never in
+// message history — seeding their ids without rebuilding their transcript
+// bubbles leaves the queued message invisible (and its cancel affordance
+// unreachable) after a restart.
+test("selectSession inbox seeding rebuilds queued bubbles, not just ids", () => {
+  const start = src.indexOf("Seed the queued-message set from the server inbox")
+  assert.ok(start !== -1, "the inbox seeding block must exist")
+  const block = src.slice(start, src.indexOf("} catch (err)", start))
+  assert.ok(block.includes("seedQueuedMessages"), "seeding must rebuild message entities for inbox entries")
+})
+
+test("loadOlderMessages carries still-queued messages across the history merge", () => {
+  const start = src.indexOf("loadOlderMessages: async")
+  assert.ok(start !== -1, "loadOlderMessages must exist")
+  const block = src.slice(start, src.indexOf("createSession", start))
+  assert.ok(block.includes("queued"), "the pending carry-over must include still-queued messages, not just temps")
+})
+
+// refreshMessages is a history-only rebuild: without the pending carry-over
+// it wipes a queued bubble the inbox seeder just rebuilt whenever it fires
+// (busy -> idle, reconnect, send-failure retry) while the entry is still
+// pending — reintroducing the "queued message disappears" bug through a
+// different path. It must merge through the same deduping helper.
+test("refreshMessages carries still-pending messages across the history rebuild", () => {
+  const start = src.indexOf("refreshMessages: async")
+  assert.ok(start !== -1, "refreshMessages must exist")
+  const block = src.slice(start, src.indexOf("revertToMessage: async", start))
+  assert.ok(block.includes("mergeHistoryWithPending"), "the refresh must reconcile instead of a bare set({ messages, parts })")
+  assert.ok(block.includes("queued"), "the refresh carry-over must include still-queued messages, not just temps")
+  assert.ok(
+    !block.includes("set({ messages, parts })"),
+    "the history-only rebuild that wiped still-pending queued bubbles is gone",
+  )
+})

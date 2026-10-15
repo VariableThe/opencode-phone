@@ -1,11 +1,12 @@
 import { create } from "zustand"
-import { ApiError, type Session, type Message, type Part, type Event, type MessageWithParts, type Client } from "../lib/sdk"
+import { ApiError, type InboxEntry, type Session, type Message, type Part, type Event, type MessageWithParts, type Client } from "../lib/sdk"
 import { useConnections } from "./connections"
 import { useSettings } from "./settings"
 import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, track } from "../lib/analytics"
 import { extractPromptFromParts, type PromptFromParts } from "../lib/prompt-from-parts"
 import { mergeIncomingMessage, mergeIncomingPart, reconcileOptimisticParts, swapOptimisticId, mergeHistoryWithPending } from "../lib/message-merge"
+import { seedQueuedMessages } from "../lib/v2-shape"
 import { removeQueued, upsertQueued } from "../lib/composer-queue"
 import { isColdSessionLoad, isLiveEventForSession } from "../lib/session-load-reconcile"
 
@@ -185,17 +186,22 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
       // Seed the queued-message set from the server inbox (v2 only — the v1
       // client has no inbox method and the guarded call degrades to empty).
+      // Queued entries live only in the inbox, never in message history — and
+      // the optimistic local copy died with the process — so seedQueuedMessages
+      // also rebuilds their transcript bubbles from the inbox payload. Without
+      // the message entities the queued ids would be tracked invisibly: nothing
+      // renders and the cancel affordance has no bubble to attach to.
       void (async () => {
-        const inboxFn = (client.session as { inbox?: (id: string) => Promise<Array<{ id: string }>> }).inbox
+        const inboxFn = (client.session as { inbox?: (id: string) => Promise<InboxEntry[]> }).inbox
         if (typeof inboxFn !== "function") return
         const entries = await inboxFn.call(client.session, sessionID).catch(() => null)
         if (!entries) return
         if (seq !== selectSeq) return
-        const ids = entries.map((e) => e.id)
         set((state) => {
           if (state.currentSession?.id !== sessionID) return {}
-          const merged = ids.reduce(upsertQueued, state.queued[sessionID] || [])
-          return { queued: { ...state.queued, [sessionID]: merged } }
+          const seeded = seedQueuedMessages(state.messages, state.parts, sessionID, entries)
+          const merged = seeded.ids.reduce(upsertQueued, state.queued[sessionID] || [])
+          return { messages: seeded.messages, parts: seeded.parts, queued: { ...state.queued, [sessionID]: merged } }
         })
       })()
     } catch (err) {
@@ -218,19 +224,21 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const response = await client.session.messages(session.id)
       const { messages: all, parts: allParts } = parseMessages(response)
 
-      // Merge: the server list wins, but keep still-pending optimistic
-      // messages (a POST whose receipt hasn't landed yet) so a just-sent
-      // message doesn't vanish mid-history-load. mergeHistoryWithPending
-      // also dedupes the server list by id — the receipt swap
-      // (swapOptimisticId) then drops the temp when the real id is already
-      // here instead of renaming it into a duplicate pair.
+      // Merge: the server list wins, but keep still-pending local messages (a
+      // POST whose receipt hasn't landed yet, plus cold-start-rebuilt queued
+      // bubbles that live only in the inbox) so a just-sent message doesn't
+      // vanish mid-history-load. mergeHistoryWithPending also dedupes the
+      // server list by id — the receipt swap (swapOptimisticId) then drops
+      // the temp when the real id is already here instead of renaming it
+      // into a duplicate pair.
       const existing = get().messages
-      const temp = existing.filter((m) => m.id.startsWith("temp-"))
-      const merged = mergeHistoryWithPending(all, temp)
+      const queuedIDs = new Set(get().queued[session.id] || [])
+      const pending = existing.filter((m) => m.id.startsWith("temp-") || queuedIDs.has(m.id))
+      const merged = mergeHistoryWithPending(all, pending)
 
       set({
         messages: merged,
-        parts: { ...allParts, ...Object.fromEntries(temp.map((m) => [m.id, get().parts[m.id] || []])) },
+        parts: { ...allParts, ...Object.fromEntries(pending.map((m) => [m.id, get().parts[m.id] || []])) },
         loadingMore: false,
         hasMore: false, // We loaded everything
       })
@@ -494,8 +502,24 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
     try {
       const response = await client.session.messages(session.id)
-      const { messages, parts } = parseMessages(response)
-      set({ messages, parts })
+      const { messages: all, parts: allParts } = parseMessages(response)
+      // History-only rebuild — but still-pending local messages live outside
+      // history (a POST whose receipt hasn't landed yet, plus seeded queued
+      // bubbles that live only in the inbox), so carry them across the same
+      // way loadOlderMessages does. A bare set({messages, parts}) here wipes
+      // a queued bubble the inbox seeder just rebuilt whenever the refresh
+      // (busy -> idle, reconnect, send-failure retry) lands while the entry
+      // is still pending. mergeHistoryWithPending dedupes by id, so an entry
+      // delivered between the fetch and this set keeps its single server copy.
+      const existing = get().messages
+      const queuedIDs = new Set(get().queued[session.id] || [])
+      const pending = existing.filter((m) => m.id.startsWith("temp-") || queuedIDs.has(m.id))
+      const merged = mergeHistoryWithPending(all, pending)
+      const currentParts = get().parts
+      set({
+        messages: merged,
+        parts: { ...allParts, ...Object.fromEntries(pending.map((m) => [m.id, currentParts[m.id] || []])) },
+      })
     } catch (error) {
       set({ error: "Failed to refresh messages" })
     }

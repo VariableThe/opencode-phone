@@ -1,7 +1,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { mergeIncomingMessage, mergeIncomingPart, reconcileOptimisticParts, swapOptimisticId, mergeHistoryWithPending } from "./message-merge.ts"
-import { userParts } from "./v2-shape.ts"
+import { userParts, seedQueuedMessages } from "./v2-shape.ts"
+import { upsertQueued, removeQueued } from "./composer-queue.ts"
 import type { Message, Part } from "./sdk.ts"
 
 const msg = (id: string, role: "user" | "assistant" = "user"): Message => ({
@@ -239,4 +240,92 @@ test("history fetch mid-POST then receipt keeps a single text part", () => {
   serverParts = base
   assert.equal(serverParts.filter((p) => p.type === "text").length, 1)
   assert.equal(renderedText(serverParts), "hello")
+})
+
+// Cold-start inbox seeding: a queued entry lives only in the server inbox,
+// never in message history — selectSession must rebuild its transcript
+// bubble from the inbox entry, or the queued message is invisible (and its
+// cancel affordance unreachable) after a restart.
+test("seedQueuedMessages rebuilds bubbles for inbox entries missing from history", () => {
+  const out = seedQueuedMessages([], {}, "s1", [{ id: "msg_q1", text: "queued hello", time: 7 }])
+  assert.deepEqual(out.messages.map((m) => m.id), ["msg_q1"])
+  assert.equal(out.messages[0].role, "user")
+  assert.equal(out.messages[0].sessionID, "s1")
+  assert.deepEqual(out.ids, ["msg_q1"])
+  assert.equal(renderedText(out.parts["msg_q1"]), "queued hello")
+})
+
+test("seedQueuedMessages skips entries already in history (delivered while closed)", () => {
+  const history = [msg("m1"), msg("msg_q1")]
+  const out = seedQueuedMessages(history, {}, "s1", [{ id: "msg_q1", text: "queued hello" }])
+  assert.deepEqual(out.messages.map((m) => m.id), ["m1", "msg_q1"])
+  assert.deepEqual(out.ids, ["msg_q1"])
+  assert.deepEqual(out.parts["msg_q1"] ?? [], [], "history parts win — no seeded shadow copy")
+})
+
+test("seedQueuedMessages with an empty inbox seeds nothing", () => {
+  const history = [msg("m1")]
+  const out = seedQueuedMessages(history, {}, "s1", [])
+  assert.deepEqual(out.messages.map((m) => m.id), ["m1"])
+  assert.deepEqual(out.ids, [])
+})
+
+test("seedQueuedMessages carries attachments through the echo part scheme", () => {
+  const out = seedQueuedMessages([], {}, "s1", [
+    { id: "msg_q1", text: "see this", files: [{ data: "YWJj", mime: "image/jpeg", name: "shot.jpg" }] },
+  ])
+  // Same ids the live inbox.enqueued fan-out builds (userParts), so the
+  // later delivery echo replaces in place instead of appending duplicates.
+  assert.deepEqual(out.parts["msg_q1"].map((p) => p.id), ["msg_q1-text", "msg_q1-file-1"])
+})
+
+// Restart → seed → deliver: the delivered message merges in place (no
+// duplicate), the queue mark drops, the bubble stays as a normal message.
+test("restart-seed-deliver leaves exactly one sent message", () => {
+  let messages: Message[] = [msg("m1")]
+  const seed = seedQueuedMessages(messages, {}, "s1", [{ id: "msg_q1", text: "queued hello" }])
+  messages = seed.messages
+  let stored: Part[] = seed.parts["msg_q1"]
+  // inbox.delivered drops only the queue mark — the bubble stays.
+  const queued = removeQueued(upsertQueued([], "msg_q1"), "msg_q1")
+  assert.deepEqual(queued, [])
+  // The delivered echo (message.updated + parts) replaces in place.
+  messages = mergeIncomingMessage(messages, { ...msg("msg_q1", "user") })
+  for (const p of userParts("msg_q1", { text: "queued hello" })) stored = mergeIncomingPart(stored, p)
+  assert.deepEqual(messages.map((m) => m.id), ["m1", "msg_q1"])
+  assert.equal(stored.filter((p) => p.type === "text").length, 1)
+  assert.equal(renderedText(stored), "queued hello")
+})
+
+test("mergeHistoryWithPending carries caller-supplied still-queued messages", () => {
+  // loadOlderMessages passes temps plus still-queued (seeded, real-id)
+  // messages; the merge must keep them so scrolling up after a restart
+  // does not wipe the rebuilt queued bubble.
+  const out = mergeHistoryWithPending([msg("m1")], [msg("msg_q1")])
+  assert.deepEqual(out.map((m) => m.id), ["m1", "msg_q1"])
+})
+
+// History-refresh interleaving (the refreshMessages residual): selectSession
+// seeds a queued bubble from the server inbox, then a history refresh
+// (busy -> idle, reconnect, send-failure retry) lands while the entry is
+// still pending. The refresh must keep the bubble exactly once, and the
+// later delivery must resolve it cleanly with no duplicate.
+test("history refresh preserves a still-queued bubble exactly once, then delivers cleanly", () => {
+  // Cold-start seed, as selectSession builds it.
+  const seed = seedQueuedMessages([msg("m1")], {}, "s1", [{ id: "msg_q1", text: "queued hello" }])
+  let messages = seed.messages
+  let stored: Part[] = seed.parts["msg_q1"]
+  // History refresh lands mid-queue: the server list has no inbox entries.
+  const refreshed = mergeHistoryWithPending([msg("m1")], messages.filter((m) => m.id.startsWith("temp-") || m.id === "msg_q1"))
+  assert.deepEqual(refreshed.map((m) => m.id), ["m1", "msg_q1"], "the queued bubble survives the refresh exactly once")
+  messages = refreshed
+  // The queued entry delivers: inbox.delivered drops only the queue mark,
+  // and the delivered echo (message.updated + parts) replaces in place.
+  const queued = removeQueued(upsertQueued([], "msg_q1"), "msg_q1")
+  assert.deepEqual(queued, [])
+  messages = mergeIncomingMessage(messages, { ...msg("msg_q1", "user") })
+  for (const p of userParts("msg_q1", { text: "queued hello" })) stored = mergeIncomingPart(stored, p)
+  assert.deepEqual(messages.map((m) => m.id), ["m1", "msg_q1"])
+  assert.equal(stored.filter((p) => p.type === "text").length, 1)
+  assert.equal(renderedText(stored), "queued hello")
 })
