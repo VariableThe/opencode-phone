@@ -1,0 +1,1 @@
+Fix: recent sessions now appear in the list when the opencode server is launched outside your home directory (e.g. ~/workspace/foo). Closes #32.

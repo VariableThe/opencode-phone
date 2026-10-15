@@ -1,0 +1,3 @@
+v0.4.15 — The app now tells you when a new version is out
+
+If you installed OpenCode from a downloaded APK, F-Droid or a mirror, there was no way to find out that a newer version existed. The app now checks once a day and shows a small banner you can dismiss. Settings also shows the version you are actually running instead of a placeholder.

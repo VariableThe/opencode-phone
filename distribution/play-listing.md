@@ -1,0 +1,368 @@
+# Google Play Store Listing — OpenCode Mobile
+
+Copy-paste reference for the Play Console store listing for `cc.agentlabs.opencode`.
+Paste these values directly into Play Console. Fields are validated against Play limits.
+
+> **Status: live.** The app is publicly available on the production track —
+> https://play.google.com/store/apps/details?id=cc.agentlabs.opencode (1K+ installs;
+> see `distribution/retention-analysis.md`). The "First release strategy" and "Pending
+> before first publish" sections below are kept as a historical record of how it got
+> there — do not read them as the current state.
+
+---
+
+## Main store listing
+
+### App name (max 30 chars)
+
+```
+OpenCode: AI Coding Agent
+```
+(25/30 chars)
+
+> Supersedes: `OpenCode` (8/30 chars — brand-only title with no keyword value).
+
+### Short description (max 80 chars)
+
+```
+AI coding agent in your pocket. Stream, diff, approve — free & open source.
+```
+(75/80 chars)
+
+> Note: type a literal `&` in Play Console — not `&amp;`.
+> Supersedes: `AI coding agent on your phone. Control opencode sessions, free & open source.` (77/80 chars) — action verbs ("Stream, diff, approve") map directly to the three headline features instead of a generic "control" claim.
+
+### Full description (max 4000 chars)
+
+```
+OpenCode Mobile is the AI coding agent companion for developers who self-host opencode. Connect your Android phone to your opencode server and run AI-powered coding sessions from anywhere — review file diffs, approve tool calls, and guide Claude, GPT, Gemini, or any other model you configure, in real time.
+
+<b>WHAT IT DOES</b>
+OpenCode Mobile is a thin client for the opencode CLI (github.com/sst/opencode). It speaks the opencode HTTP + SSE API, so every AI coding session on your workstation or server is instantly reachable from your phone. All AI model calls go through your own server — your API keys, your code, your infrastructure. Nothing passes through our servers.
+
+<b>CORE FEATURES</b>
+• Real-time streaming chat — watch your AI coding agent think and respond token by token, just like a desktop terminal
+• File diff viewer — see every code change the agent proposes before you approve it; no surprise rewrites
+• Tool-call approval — review and approve or reject file writes, shell commands, and other agent actions from your phone
+• Multi-session management — start, resume, and switch between coding sessions without losing context
+• Browsable directory picker — jump into any project folder on your server without typing a path
+• Reasoning-effort control — tune how hard the model thinks per session, right from your phone
+• Biometric unlock — fingerprint or face unlock keeps your sessions private on shared or lost devices
+
+<b>CONNECTION OPTIONS</b>
+Connect any way that works for your setup:
+• Local Wi-Fi — zero config when phone and dev machine are on the same network
+• Tailscale — connect securely across networks without opening ports; ideal for remote work
+• Cloudflare Tunnel — public HTTPS endpoint for your opencode server in minutes
+• ngrok — quick ad-hoc tunnels for demos or one-off remote sessions
+• opencode Cloud — managed hosting coming soon
+
+<b>WHO IT'S FOR</b>
+• Developers running opencode on their workstation who want to check in from their phone
+• Engineers away from their desk who want to review or steer long-running AI coding jobs
+• Teams self-hosting AI developer tools who want a polished mobile interface
+• Open-source contributors who want a free, MIT-licensed alternative to proprietary AI coding apps
+
+<b>WHAT IT IS NOT</b>
+• Not a standalone AI model — you bring your own opencode server, which can connect to Claude, GPT, Gemini, local LLMs, or any other model via your own API keys
+• Not a code editor — it pairs with your existing IDE and terminal workflow
+• Not a subscription app — free, open-source, MIT licensed, no ads, no telemetry you did not opt into
+
+<b>GETTING STARTED</b>
+Install opencode on any machine:
+  npm install -g opencode-ai
+  opencode serve
+
+Then open the app, tap Connect, paste your server URL, and you're in. Your AI coding agent is now on your phone.
+
+<b>OPEN SOURCE</b>
+OpenCode Mobile is MIT licensed. Source code, issue tracker, and community at github.com/dzianisv/opencode-mobile. Contributions welcome.
+
+<b>PRIVACY</b>
+OpenCode Mobile does not collect your code, prompts, or AI responses. All traffic goes directly from the app to YOUR opencode server — never through our infrastructure. With your opt-in consent we use Sentry for crash diagnostics and PostHog for anonymous usage analytics (no PII, no message content, off by default). Diagnostic reports you share are also delivered to our support inbox. If you choose to join the optional OpenCode Connect waitlist, we collect the email address you enter to notify you at launch.
+
+Support: support@agentlabs.cc
+Issues: github.com/dzianisv/opencode-mobile/issues
+```
+(3474/4000 chars)
+
+> Supersedes the prior draft, which named a dated model ("GPT-4") and was missing the directory picker and reasoning-effort features shipped since. Model references are now version-free by design ("Claude, GPT, Gemini, or any other model") so this copy doesn't go stale again as model names change.
+
+---
+
+## Keywords (not a Play Console field — guides copy and ASO)
+
+### Primary keywords (title + short desc + first 3 lines of description)
+
+| Keyword | Priority |
+|---|---|
+| `AI coding agent` | High |
+| `coding assistant` | High |
+| `opencode` | High |
+| `developer tools` | Medium |
+| `self-hosted AI` | High |
+
+### Secondary keywords (weave into description body)
+
+| Keyword | Rationale |
+|---|---|
+| `AI code review` | Maps to the diff viewer feature |
+| `remote development` | Captures devs working off-device |
+| `LLM client` | Early-adopter / technically precise audience |
+| `Claude mobile` | Brand-transfer from Anthropic Claude users |
+| `GPT coding` | Brand-transfer from OpenAI users |
+| `coding on phone` | Low-competition long-tail |
+| `AI terminal` | CLI-oriented devs |
+| `Tailscale` / `Cloudflare Tunnel` | Appears naturally in description; captures tunnel-search users |
+
+### Keywords to avoid
+
+| Keyword | Reason |
+|---|---|
+| `Copilot`, `Cursor` | Competitor brand names — policy violation |
+| `#1 AI coding app` | Superlative claims prohibited by Play policy |
+| `free AI` | "Free" in title/short desc is prohibited; fine in body |
+| `ChatGPT` | OpenAI brand — avoid unless describing a supported model |
+
+---
+
+## Categorization
+
+| Field | Value | Notes |
+|---|---|---|
+| App or game | App | |
+| Category | Tools | 36.8% CVR on Play vs 27.3% average. Productivity rejected — higher competition, less precise. |
+| Tags | developer, ai, coding, open-source, productivity | Submit all five in Play Console. |
+| Email | support@agentlabs.cc | Already verified during signup. |
+| Phone | +1 360-504-8967 | Optional public; matches developer profile. |
+| Website | https://agentlabs.cc/opencode | Already verified. |
+
+---
+
+## Graphic assets — REQUIRED before publishing
+
+| Asset | Spec | Status | Notes |
+|---|---|---|---|
+| App icon | 512×512 PNG, 32-bit, ≤1 MB | ❌ placeholder | `assets/icon.json` is `{"placeholder":true}` — need real PNG |
+| Adaptive icon (foreground) | 432×432 PNG, transparent bg | ❌ placeholder | `assets/adaptive-icon.json` placeholder |
+| Feature graphic | 1024×500 PNG/JPG | ❌ missing | Required for editorial featuring placements |
+| Phone screenshots | 2–8 images, 16:9 or 9:16, 1080×1920 or similar | ❌ missing | Required min 2; blocks all tracks beyond Internal |
+| 7-inch tablet screenshots | optional | ❌ missing | Recommended |
+| 10-inch tablet screenshots | optional | ❌ missing | Recommended |
+| Promo video | YouTube URL, optional | ⏸ skip for first release | Low ROI for dev-tool audience |
+
+**Recommended screenshot order (with captions for the Play Console "Add captions" field):**
+1. Connection setup — "Connect to your opencode server — Wi-Fi, Tailscale, or tunnel"
+2. Active streaming chat session — "Watch your AI coding agent think in real time, token by token"
+3. File diff viewer — "Review every file change before it lands — approve or reject"
+4. Tool call approval dialog — "Stay in control: approve shell commands and file writes from your phone"
+5. Session list / multi-session view — "Manage multiple AI coding sessions — resume any job from anywhere"
+6. Biometric unlock screen — "Fingerprint or face unlock keeps your sessions private"
+
+---
+
+## Privacy policy URL
+
+**Required.** Must be a public URL.
+
+Suggested path: `https://dzianisv.github.io/opencode-mobile/privacy/`
+
+Privacy policy must cover:
+- What data is collected (Sentry crash diagnostics: device model, OS version, stack trace; PostHog usage analytics: activation-funnel events with coarse properties; Chatwoot shared support reports: scrubbed diagnostic reports sent only when the user taps "Share Report"; **email address: only if the user opts into the optional "OpenCode Connect" waitlist on the Connect screen** — no other user content in any of them)
+- How data is used (debugging crashes; measuring whether new users successfully connect/activate; responding to user-initiated support reports; **notifying waitlist signups when the hosted service launches**)
+- Third-party SDKs (Sentry — https://sentry.io/privacy/; PostHog — https://posthog.com/privacy; **Brevo — https://www.brevo.com/legal/privacypolicy/, used only for the optional waitlist**) and our own self-hosted Chatwoot support inbox (support.agentlabs.cc — not a third-party vendor)
+- Data retention (Sentry default 90 days; PostHog standard retention; Chatwoot support conversations retained until resolved, then periodically purged; **waitlist emails retained in Brevo until the user unsubscribes or requests deletion**)
+- User rights (delete request via email, contact us)
+- Contact: support@agentlabs.cc
+
+```
+OpenCode Mobile Privacy Policy
+Effective: 2026-05-24
+Operator: VIBE TECHNOLOGIES, LLC, 519 S Henderson St, Seattle WA 98108-4522 USA
+
+We do not collect your code, prompts, AI responses, server URLs, or chat history.
+
+We collect, only with your opt-in consent (single toggle, default OFF):
+
+Via Sentry SDK (crash reporting):
+- Device model, OS version, app version
+- Stack traces of crashes and unhandled errors
+- App breadcrumbs (function names, screen names — no message bodies)
+
+Via PostHog SDK (anonymous usage analytics, EU region):
+- Activation-funnel events: app_opened, connection_form_submitted,
+  connection_attempted, connection_succeeded, connection_failed,
+  message_sent, response_received
+- Only coarse properties (e.g. mode=quick/advanced, error_class=timeout);
+  never server URLs, prompts, code, or raw error text
+
+Via our own Chatwoot support inbox (support.agentlabs.cc), only when you tap
+"Share Report":
+- The same diagnostic report shown in the OS share sheet: connection
+  classification, probe results, device info, and recent app logs
+- Every URL and every hostname/IP probed this session is redacted first —
+  your server address never reaches this inbox
+- A random per-install identifier links follow-up reports into the same
+  support conversation; not linked to your name, email, or account
+
+Separately, and independent of the consent toggle above, if you choose to
+join the optional "OpenCode Connect" waitlist on the Connect screen:
+- We collect the email address you type into that field
+- We send it to Brevo, a third-party email marketing/CRM platform, to add
+  you to the waitlist and notify you when the hosted service launches
+- This is entirely optional — nothing is collected unless you open the
+  waitlist card and submit an email
+
+Data is sent to Sentry (sentry.io, ~90 days retention), PostHog
+(eu.i.posthog.com, standard retention), Brevo (waitlist emails, retained
+until you unsubscribe or request deletion), and our Chatwoot instance
+(support.agentlabs.cc, retained until the conversation is resolved and
+periodically purged thereafter).
+
+Third-party services:
+- Sentry — crash reporting. https://sentry.io/privacy/
+- PostHog — usage analytics. https://posthog.com/privacy
+- Brevo — waitlist email management (only if you join the waitlist).
+  https://www.brevo.com/legal/privacypolicy/
+
+Self-hosted infrastructure:
+- Chatwoot support inbox (support.agentlabs.cc) — we operate this
+  ourselves; it is not a third-party vendor.
+
+Data sharing: Sentry, PostHog, Brevo (waitlist only), and our own Chatwoot
+support inbox.
+
+User rights:
+- Email support@agentlabs.cc to request deletion of crash records, analytics
+  records, waitlist email records, or shared support-report conversations
+  associated with your device.
+
+Contact: support@agentlabs.cc
+```
+
+---
+
+## Data safety form
+
+Google requires this before publishing. Answers for OpenCode Mobile current state.
+
+| Question | Answer |
+|---|---|
+| Does your app collect or share any of the required user data types? | Yes |
+| Is all of the user data collected by your app encrypted in transit? | Yes (HTTPS to Sentry, PostHog, Brevo, and our Chatwoot support inbox) |
+| Do you provide a way for users to request that their data is deleted? | Yes — via support@agentlabs.cc |
+
+### Data types collected
+
+| Data type | Collected? | Shared? | Optional? | Purpose | Encrypted in transit? |
+|---|---|---|---|---|---|
+| App crash logs (Diagnostics) | Yes | Yes (Sentry) | **Yes (opt-in, default OFF)** | App functionality, diagnostics | Yes |
+| App interactions (App activity) | Yes | Yes (PostHog) | **Yes (opt-in, default OFF, same toggle)** | Analytics (activation funnel: app opened, connection attempted/succeeded/failed, message sent, response received) | Yes |
+| Device or other IDs | Yes | Yes (Sentry/PostHog anonymous IDs) | **Yes (opt-in, default OFF)** | Diagnostics, analytics — random app-generated IDs, not linked to identity | Yes |
+| User-submitted diagnostic reports (Diagnostics) | Yes | Yes (delivered to our own self-hosted Chatwoot support inbox) | **Yes (opt-in, default OFF, same toggle; also requires the user to manually tap "Share Report")** | Customer support — troubleshooting a connection failure or crash the user chose to report; server address always redacted first | Yes |
+| Personal info — Email address | **Yes** | **Yes (Brevo, third-party email marketing/CRM platform)** | **Yes — entirely optional; only collected if the user opens the "OpenCode Connect" waitlist card on the Connect screen and submits an email. Independent of the Sentry/PostHog consent toggle.** | **Account management (waitlist signup for the not-yet-launched "OpenCode Connect" hosted service) / App functionality** | Yes |
+| Financial info | No | – | – | – | – |
+| Health / fitness | No | – | – | – | – |
+| Messages | No | – | – | – | – |
+| Photos / videos | No | – | – | – | – |
+| Audio | No | – | – | – | – |
+| Files and docs | No | – | – | – | – |
+| Calendar | No | – | – | – | – |
+| Contacts | No | – | – | – | – |
+| App activity (searches, viewed content) | No | – | – | – | – |
+| Web browsing | No | – | – | – | – |
+| App info and performance (other than crash logs) | No | – | – | – | – |
+
+---
+
+## Content rating
+
+Run the IARC questionnaire on Play Console. Expected outcome based on app content:
+
+| Region | Expected rating |
+|---|---|
+| ESRB (US) | Everyone |
+| PEGI (EU) | 3 |
+| USK (Germany) | 0 |
+| Australia | G |
+
+Questionnaire answers (all "No" — no violence / sexual / drugs / gambling content; app is a dev tool):
+- Does it contain violence? No
+- Does it contain sexual content? No
+- Does it contain crude humor? No
+- Does it use drugs/alcohol/tobacco? No
+- Does it contain gambling? No
+- Does it share user location? No
+- Does it share user-generated content? No (private user → user-self only)
+- Does it allow users to interact / chat? Yes (with their OWN backend, not other users)
+
+If "interact with other users" is asked: answer NO — the chat is between the user and their own AI agent, not user-to-user.
+
+---
+
+## Target audience and content
+
+| Field | Value |
+|---|---|
+| Target age group | 18+ (developer tool) |
+| Appeals to children? | No |
+| Ads? | No |
+| In-app purchases? | (TBD — see monetization decision) |
+
+---
+
+## App access
+
+| Field | Value |
+|---|---|
+| All functionality available without restrictions? | No — requires user to provide their own opencode server URL |
+| Provide test credentials? | Yes — provide Google reviewer with a temporary opencode server URL or instructions to spin one up |
+
+Reviewer instructions (paste in App Access form):
+
+```
+OpenCode Mobile requires the user to bring their own opencode server (https://opencode.ai). To review the app:
+
+1. Install opencode on any machine: `npm install -g opencode-ai`
+2. Run `opencode serve` — prints a local URL like http://localhost:4096
+3. In the app, tap "Connect" → enter the URL → connect.
+4. Start a session, type a prompt, observe streaming response.
+
+If reviewers cannot self-host, contact support@agentlabs.cc and we will provide a temporary hosted opencode endpoint for review.
+```
+
+---
+
+## Release notes / "What's new" per release
+
+Wired in CI: `distribution/whatsnew/whatsnew-en-US`.
+
+Bump this file before tagging a release. Keep it under 500 chars. Per-language variants supported (`whatsnew-fr-FR`, `whatsnew-de-DE`, etc.).
+
+---
+
+## First release strategy (historical — completed)
+
+1. **Internal testing** track first (up to 100 testers, no review) — what CI was wired for.
+2. **Closed testing** — 14+ days, 12+ testers required for new org accounts before promoting to production (Google's 2023 policy).
+3. **Open testing** — optional intermediate step.
+4. **Production** — only after Closed testing requirements met.
+
+Result: the app cleared this path and is now live on the production track (see the
+status note at the top of this file). CI's default dispatch track (`internal`) is
+still used for routine test builds; production releases are dispatched explicitly
+(`track=production`) — see `.github/workflows/publish-play-store.yml`.
+
+---
+
+## Pending before first publish (historical — resolved)
+
+- [x] Identity verification (government ID upload, Google review)
+- [x] App icon (real PNG, not placeholder)
+- [x] Adaptive icon (real PNG)
+- [x] Feature graphic 1024×500
+- [x] At least 2 phone screenshots
+- [x] Privacy policy live at https://dzianisv.github.io/opencode-mobile/privacy/
+- [x] Decide pricing model (free, no ads, no IAP)
+- [x] Run IARC content rating questionnaire (after app created in Play Console)
+- [x] Complete Data safety form (after app created in Play Console)

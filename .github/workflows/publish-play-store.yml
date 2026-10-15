@@ -1,0 +1,199 @@
+name: Publish to Google Play Store
+
+on:
+  release:
+    types: [published]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track to release to"
+        required: false
+        default: "internal"
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      status:
+        description: "Release status (draft = uploads without going live/review; completed = submit)"
+        required: false
+        default: "completed"
+        type: choice
+        options:
+          - completed
+          - draft
+
+# A tag push and a `release: published` for the same version must not race two
+# uploads into the same track. Serialize per ref instead of cancelling, because
+# cancelling mid-upload can leave a half-created Play release.
+concurrency:
+  group: publish-play-store-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+      EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+      EXPO_PUBLIC_CHATWOOT_INBOX_IDENTIFIER: ${{ secrets.EXPO_PUBLIC_CHATWOOT_INBOX_IDENTIFIER }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Android build outputs
+        uses: actions/cache@v5
+        with:
+          path: |
+            android/app/build/intermediates
+            android/build
+            android/app/.cxx
+          key: ${{ runner.os }}-android-build-${{ hashFiles('package-lock.json', 'android/**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-android-build-
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Bump android.versionCode in app.json
+        # Play Store rejects duplicate versionCodes, so derive a monotonic value
+        # from github.run_number + offset. expo prebuild reads this into build.gradle.
+        # Offset 100 skips past historical collisions (run 31 collided with a
+        # manual upload at versionCode 31). Next run = run_number + 100.
+        run: |
+          node -e "const f='app.json';const j=require('./'+f);j.expo.android=j.expo.android||{};j.expo.android.versionCode=${{ github.run_number }}+100;require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+          echo "versionCode now: $(node -p "require('./app.json').expo.android.versionCode")"
+
+      - name: Set Sentry release identifiers
+        # sentry.gradle (applied from android/app/build.gradle) defaults the
+        # upload's --release/--dist to `${applicationId}@${versionName}+${versionCode}`,
+        # which does NOT match the release/dist Sentry.init() reports at runtime
+        # (`opencode-mobile@${app.json version}`, see src/lib/sentry.ts). That
+        # mismatch made every uploaded source map land under a release Sentry
+        # never looks up, so symbolication silently failed. Pin the Gradle-side
+        # values to exactly what the app reports. (Only expo.version matters
+        # here, not the android.versionCode bumped above.)
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          echo "SENTRY_RELEASE=opencode-mobile@${VERSION}" >> "$GITHUB_ENV"
+          echo "SENTRY_DIST=${VERSION}" >> "$GITHUB_ENV"
+          echo "Sentry release=opencode-mobile@${VERSION} dist=${VERSION}"
+
+      - name: Purge stale generated sources
+        # The Android build cache (restore-keys prefix fallback) can restore a
+        # generated autolinking tree from a previous package id. Gradle then
+        # reuses ReactNativeApplicationEntryPoint.java referencing the OLD
+        # package (ai.opencode.mobile.BuildConfig) and compileReleaseJavaWithJavac
+        # fails. Delete generated sources so prebuild + Gradle regenerate them
+        # for the current package (cc.agentlabs.opencode).
+        run: rm -rf android/app/build/generated android/build/generated android/app/build/intermediates
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Build AAB
+        working-directory: android
+        env:
+          RELEASE_STORE_FILE: release.keystore
+          RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew bundleRelease
+
+      - name: Verify the Sentry noise gate is in the artifact
+        # AGE-105: the org error quota is defended ONLY by the client-side gate.
+        # Every server-side lever on this Sentry plan was probed and is dead
+        # (docs/analytics.md): per-key rate limit answers 200 and silently drops
+        # the field, custom error-message filters answer 400 "You do not have
+        # that feature enabled", and spike protection is already on everywhere
+        # but only catches spikes, not this steady baseline. If a build ships
+        # without the gate — or without a DSN, which makes Sentry a silent
+        # no-op — the org goes back over quota, and while it is over quota
+        # Sentry stores nothing, so the regression is invisible in Sentry itself
+        # until the monthly reset.
+        # Grep the shipped Hermes bundle instead. Verified to discriminate:
+        # v0.4.14 passes, pre-gate v0.4.13 fails.
+        run: node scripts/verify-release-bundle.mjs android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-release-bundle
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Resolve Play track
+        id: channel
+        # AGE-110: releases used to land on `internal` and stop there — production
+        # only moved when a human remembered to run workflow_dispatch. It served
+        # versionCode 136 (v0.4.5, 2026-06-22) for EIGHT weeks for that reason,
+        # which is why a client-side fix shipped in v0.4.14 could not reach the
+        # install base. A release tag is already a deliberate act; treat it as one
+        # and publish it to the auto-updating channel. Manual dispatch keeps its
+        # inputs so `internal`/`draft` dry runs are still one click away.
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TRACK="${{ github.event.inputs.track || 'internal' }}"
+            STATUS="${{ github.event.inputs.status || 'completed' }}"
+          else
+            TRACK=production
+            STATUS=completed
+          fi
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "event=${{ github.event_name }} -> track=$TRACK status=$STATUS"
+
+      - name: Publish to Play Store
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: cc.agentlabs.opencode
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ steps.channel.outputs.track }}
+          status: ${{ steps.channel.outputs.status }}
+          whatsNewDirectory: distribution/whatsnew
+
+      - name: Record where it landed
+        if: always()
+        run: |
+          {
+            echo "### Play publish"
+            echo ""
+            echo "- event: \`${{ github.event_name }}\`"
+            echo "- track: \`${{ steps.channel.outputs.track }}\`"
+            echo "- status: \`${{ steps.channel.outputs.status }}\`"
+            echo "- versionCode: \`$(node -p "require('./app.json').expo.android.versionCode" 2>/dev/null || echo unknown)\`"
+            echo "- version: \`$(node -p "require('./app.json').expo.version" 2>/dev/null || echo unknown)\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,11 @@
+v0.4.6 — Sessions loading verified + Play Store improvements
+
+• Sessions loading regression: previous fix was validated by a broken test.
+  Test now requires a pre-existing session to appear on connect — confirmed
+  working in CI (CUA sessions_reload phase: PASS).
+• Test also verifies sessions remain visible after navigating back from a
+  session chat view.
+• Updated support email to support@agentlabs.cc
+• Descriptions rewritten: clearer opencode serve remote control model,
+  Tailscale as recommended connectivity
+• New screenshots and 10x speed demo video

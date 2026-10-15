@@ -1,0 +1,165 @@
+name: Publish F-Droid Repo
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish-fdroid:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+      EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Check release version metadata
+        run: npm run check:versions
+
+      - name: Set Sentry release identifiers
+        # sentry.gradle (applied from android/app/build.gradle) defaults the
+        # upload's --release/--dist to `${applicationId}@${versionName}+${versionCode}`,
+        # which does NOT match the release/dist Sentry.init() reports at runtime
+        # (`opencode-mobile@${app.json version}`, see src/lib/sentry.ts). That
+        # mismatch made every uploaded source map land under a release Sentry
+        # never looks up, so symbolication silently failed. Pin the Gradle-side
+        # values to exactly what the app reports.
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          echo "SENTRY_RELEASE=opencode-mobile@${VERSION}" >> "$GITHUB_ENV"
+          echo "SENTRY_DIST=${VERSION}" >> "$GITHUB_ENV"
+          echo "Sentry release=opencode-mobile@${VERSION} dist=${VERSION}"
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Setup signing
+        run: |
+          if [[ -n "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "RELEASE_STORE_FILE=release.keystore" >> "$GITHUB_ENV"
+            echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "Signing: production keystore"
+          else
+            keytool -genkey -v -keystore android/app/debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            echo "Signing: debug keystore"
+          fi
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: Re-sign APK v1+v2 only (drop v3/v4 for fdroidserver compatibility)
+        if: ${{ env.RELEASE_STORE_FILE != '' }}
+        run: |
+          # androguard (used by fdroidserver) crashes parsing a v2+v3 signature
+          # block pair: "'NoOverwriteDict' object has no attribute 'append'".
+          # expo prebuild regenerates build.gradle, so we can't rely on the
+          # gradle signing flags surviving — force v1+v2-only here deterministically.
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          echo "Using $APKSIGNER"
+          "$APKSIGNER" sign \
+            --ks android/app/release.keystore \
+            --ks-pass "pass:${RELEASE_STORE_PASSWORD}" \
+            --ks-key-alias "${RELEASE_KEY_ALIAS}" \
+            --key-pass "pass:${RELEASE_KEY_PASSWORD}" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --v4-signing-enabled false \
+            "$APK"
+          echo "=== signature schemes after re-sign ==="
+          "$APKSIGNER" verify -v "$APK" | grep -i "Verified using" || true
+
+      - name: Install fdroidserver
+        # androguard version matters. 4.1.4 crashes extracting the signer cert
+        # ("'NoOverwriteDict' object has no attribute 'append'" in
+        # parse_v2_v3_signature) — this is what broke the publish from v0.4.2 on.
+        # 4.1.3 is the version that successfully published v0.3.2–v0.4.1 and parses
+        # our (v1+v2-only, re-signed above) APK cleanly — verified locally against
+        # the release APK via fdroidserver.common.get_first_signer_certificate.
+        run: pip install "fdroidserver==2.4.4" "androguard==4.1.3"
+
+      - name: Setup F-Droid repo
+        id: fdroid-setup
+        run: |
+          FDROID_DIR="$HOME/fdroid-repo"
+          mkdir -p "$FDROID_DIR/repo"
+          mkdir -p "$FDROID_DIR/metadata"
+
+          echo "${{ secrets.FDROID_REPO_KEYSTORE_B64 }}" | base64 -d > "$FDROID_DIR/repo-keystore.jks"
+
+          cat > "$FDROID_DIR/config.yml" << CONFIGEOF
+          repo_url: https://dzianisv.github.io/opencode-mobile/fdroid/repo
+          repo_name: OpenCode Mobile
+          repo_description: OpenCode Mobile - AI coding assistant companion app
+          keystore: $FDROID_DIR/repo-keystore.jks
+          repo_keyalias: ${{ secrets.FDROID_REPO_KEY_ALIAS }}
+          keystorepass: ${{ secrets.FDROID_REPO_KEYSTORE_PASS }}
+          keypass: ${{ secrets.FDROID_REPO_KEY_PASS }}
+          CONFIGEOF
+
+          cp android/app/build/outputs/apk/release/app-release.apk "$FDROID_DIR/repo/"
+
+          echo "fdroid-dir=$FDROID_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Generate F-Droid repo index
+        run: |
+          cd "${{ steps.fdroid-setup.outputs.fdroid-dir }}"
+          fdroid update --create-metadata
+
+      - name: Verify F-Droid repo index was generated
+        run: |
+          IDX="${{ steps.fdroid-setup.outputs.fdroid-dir }}/repo/index.xml"
+          if [[ ! -f "$IDX" ]]; then
+            echo "ERROR: F-Droid repo index not generated at $IDX"
+            ls -la "${{ steps.fdroid-setup.outputs.fdroid-dir }}/repo/" || true
+            exit 1
+          fi
+          echo "F-Droid repo index verified: $(wc -c < "$IDX") bytes"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ${{ steps.fdroid-setup.outputs.fdroid-dir }}/repo
+          destination_dir: fdroid/repo
+          keep_files: true

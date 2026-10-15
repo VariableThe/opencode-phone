@@ -1,0 +1,8 @@
+v0.4.4 — UI/UX polish
+
+- Long lines in code blocks and diffs now scroll horizontally instead of being cut off
+- Clear feedback when a message fails to send — no more silently dropped messages
+- Biometric unlock no longer auto-prompts unexpectedly, and cancelling is handled cleanly
+- Session delete and rename now show an error if they fail, and guard against double-taps
+- Fixed a pull-to-refresh spinner that could hang
+- Server URL is validated when you add or edit a connection

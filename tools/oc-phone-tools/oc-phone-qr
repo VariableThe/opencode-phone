@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# oc-phone-qr: print a terminal QR code that onboards the oc-phone app in one scan.
+#
+# Payload contract: ocphone://connect?v=1&d=<base64url(JSON)>  (see README.md "Payload contract (frozen: v1)")
+# Source of truth lives in the oc-phone-tools repo; installed as ~/.local/bin/oc-phone-qr -> symlink.
+set -u
+
+ENV_FILE="${OC_PHONE_ENV_FILE:-$HOME/.config/oc-phone/env}"
+SERVER_PORT_DEFAULT=4096
+
+usage() {
+  cat <<'EOF'
+Usage: oc-phone-qr [options]
+
+Prints a terminal QR code encoding everything the oc-phone app needs to add
+this workstation as a connection in one scan.
+
+Options:
+  --no-secrets        Omit `password` and `bridgeToken` from the payload
+                      (you type them into the app manually). Use on shared screens.
+  --print-payload     Print the ocphone:// URL alongside the QR (debugging).
+  --small, --ascii    Render a compact (half-block, two-rows-per-line) QR for
+                      narrow terminals. Default is the full-size ANSI-block QR.
+  --force             Print the QR even if the server health check fails.
+  --host=IP           Override the Tailnet host (env: OC_PHONE_HOST, else OC_BRIDGE_HOST).
+  --server-port=N     Override the opencode server port (env: OC_PHONE_SERVER_PORT, default 4096).
+  --bridge-port=N     Override the bridge port (env: OC_PHONE_BRIDGE_PORT, else OC_BRIDGE_PORT).
+  --dir=PATH          Override defaultProjectDir (env: OC_PHONE_DIR, else first
+                      entry of OC_BRIDGE_ALLOWED_ROOTS).
+  --name=LABEL        Override the connection label (env: OC_PHONE_NAME, else the
+                      Tailscale self hostname, else `hostname -s`).
+  -h, --help          Show this help.
+
+Env overrides: OC_PHONE_HOST, OC_PHONE_SERVER_PORT, OC_PHONE_BRIDGE_PORT,
+OC_PHONE_DIR, OC_PHONE_NAME. CLI flags win over env vars.
+
+WARNING: the default QR encodes LIVE credentials (server password + bridge
+token). Never display it on a shared screen, stream, or screenshot it to chat.
+Use --no-secrets in shared spaces.
+EOF
+}
+
+NO_SECRETS=0
+PRINT_PAYLOAD=0
+SMALL=0
+FORCE=0
+HOST_OVERRIDE=""
+SERVER_PORT_OVERRIDE=""
+BRIDGE_PORT_OVERRIDE=""
+DIR_OVERRIDE=""
+NAME_OVERRIDE=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-secrets) NO_SECRETS=1 ;;
+    --print-payload) PRINT_PAYLOAD=1 ;;
+    --small|--ascii) SMALL=1 ;;
+    --force) FORCE=1 ;;
+    --host=*) HOST_OVERRIDE="${arg#--host=}" ;;
+    --server-port=*) SERVER_PORT_OVERRIDE="${arg#--server-port=}" ;;
+    --bridge-port=*) BRIDGE_PORT_OVERRIDE="${arg#--bridge-port=}" ;;
+    --dir=*) DIR_OVERRIDE="${arg#--dir=}" ;;
+    --name=*) NAME_OVERRIDE="${arg#--name=}" ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "oc-phone-qr: unknown flag: $arg (see --help)" >&2; exit 2 ;;
+  esac
+done
+
+# --- Load credentials -------------------------------------------------------
+# Gotcha: ~/.config/oc-phone/env uses BARE assignments (no `export`), so it
+# must be sourced with `set -a` active or child processes (node/curl/npx)
+# will not see the values.
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "oc-phone-qr: missing env file: $ENV_FILE" >&2
+  exit 1
+fi
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+: "${OPENCODE_SERVER_USERNAME:?OPENCODE_SERVER_USERNAME missing in $ENV_FILE}"
+: "${OPENCODE_SERVER_PASSWORD:?OPENCODE_SERVER_PASSWORD missing in $ENV_FILE}"
+: "${OC_BRIDGE_TOKEN:?OC_BRIDGE_TOKEN missing in $ENV_FILE}"
+
+HOST="${HOST_OVERRIDE:-${OC_PHONE_HOST:-${OC_BRIDGE_HOST:-}}}"
+[[ -n "$HOST" ]] || { echo "oc-phone-qr: no host (set --host, OC_PHONE_HOST, or OC_BRIDGE_HOST)" >&2; exit 1; }
+SERVER_PORT="${SERVER_PORT_OVERRIDE:-${OC_PHONE_SERVER_PORT:-$SERVER_PORT_DEFAULT}}"
+BRIDGE_PORT="${BRIDGE_PORT_OVERRIDE:-${OC_PHONE_BRIDGE_PORT:-${OC_BRIDGE_PORT:-8787}}}"
+# OC_BRIDGE_ALLOWED_ROOTS is comma-separated (see oc-phone-bridge src/config.ts).
+FIRST_ROOT="${OC_BRIDGE_ALLOWED_ROOTS%%,*}"
+DIR="${DIR_OVERRIDE:-${OC_PHONE_DIR:-$FIRST_ROOT}}"
+[[ -n "$DIR" ]] || { echo "oc-phone-qr: no default dir (set --dir, OC_PHONE_DIR, or OC_BRIDGE_ALLOWED_ROOTS)" >&2; exit 1; }
+
+pick_name() {
+  if [[ -n "$NAME_OVERRIDE" ]]; then printf '%s' "$NAME_OVERRIDE"; return; fi
+  if [[ -n "${OC_PHONE_NAME:-}" ]]; then printf '%s' "$OC_PHONE_NAME"; return; fi
+  # Tailscale self hostname (e.g. "myserver") is the friendliest label.
+  local ts
+  if command -v tailscale >/dev/null 2>&1; then
+    ts="$(tailscale status --self 2>/dev/null | awk '{print $2}' | head -n1)"
+    if [[ -n "$ts" && "$ts" != "-" ]]; then printf '%s' "$ts"; return; fi
+  fi
+  hostname -s 2>/dev/null || hostname 2>/dev/null || printf 'workstation'
+}
+NAME="$(pick_name)"
+
+URL="http://${HOST}:${SERVER_PORT}"
+BRIDGE_URL="http://${HOST}:${BRIDGE_PORT}"
+
+# --- Health check: authenticated GET /api/info --------------------------------
+INFO_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+  -u "${OPENCODE_SERVER_USERNAME}:${OPENCODE_SERVER_PASSWORD}" \
+  "http://${HOST}:${SERVER_PORT}/api/info" --max-time 8 2>/dev/null || true)"
+[[ "$INFO_CODE" =~ ^[0-9]{3}$ ]] || INFO_CODE="000"
+if [[ "$INFO_CODE" != "200" ]]; then
+  echo "oc-phone-qr: WARNING: server health check failed: GET http://${HOST}:${SERVER_PORT}/api/info -> HTTP ${INFO_CODE}" >&2
+  echo "oc-phone-qr: (is 'oc-phone-up' running? bridge/server bound to the Tailnet IP only.)" >&2
+  if [[ "$FORCE" != "1" ]]; then
+    echo "oc-phone-qr: aborting; re-run with --force to print the QR anyway." >&2
+    exit 1
+  fi
+  echo "oc-phone-qr: --force given; printing QR anyway." >&2
+fi
+
+# --- Build the payload URL (node: no jq dependency, exact base64url) ----------
+# Contract (frozen v1): ocphone://connect?v=1&d=<base64url(UTF-8 JSON, no padding)>
+# JSON: {v:1,name,url,username,password?,bridgeUrl,bridgeToken?,defaultProjectDir}
+# --no-secrets drops `password` and `bridgeToken` keys entirely.
+export OC_QR_NAME="$NAME" OC_QR_URL="$URL" OC_QR_USER="$OPENCODE_SERVER_USERNAME" \
+  OC_QR_BRIDGE_URL="$BRIDGE_URL" OC_QR_DIR="$DIR" OC_QR_NO_SECRETS="$NO_SECRETS"
+PAYLOAD_URL="$(node -e '
+const b64url = (s) => Buffer.from(s, "utf8").toString("base64")
+  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const o = {
+  v: 1,
+  name: process.env.OC_QR_NAME,
+  url: process.env.OC_QR_URL,
+  username: process.env.OC_QR_USER,
+  bridgeUrl: process.env.OC_QR_BRIDGE_URL,
+  defaultProjectDir: process.env.OC_QR_DIR,
+};
+if (process.env.OC_QR_NO_SECRETS !== "1") {
+  o.password = process.env.OPENCODE_SERVER_PASSWORD;
+  o.bridgeToken = process.env.OC_BRIDGE_TOKEN;
+}
+process.stdout.write("ocphone://connect?v=1&d=" + b64url(JSON.stringify(o)));
+')"
+unset OC_QR_NAME OC_QR_URL OC_QR_USER OC_QR_BRIDGE_URL OC_QR_DIR OC_QR_NO_SECRETS
+[[ -n "$PAYLOAD_URL" ]] || { echo "oc-phone-qr: failed to build payload (node missing?)" >&2; exit 1; }
+
+# --- Output -------------------------------------------------------------------
+{
+  echo "Connection: ${NAME}"
+  echo "  server : ${URL}  (user ${OPENCODE_SERVER_USERNAME})"
+  echo "  bridge : ${BRIDGE_URL}"
+  echo "  dir    : ${DIR}"
+  if [[ "$NO_SECRETS" == "1" ]]; then
+    echo "  secrets: OMITTED (--no-secrets; enter password + bridge token in the app)"
+  else
+    echo "  secrets: EMBEDDED (password + bridge token)"
+  fi
+  echo ""
+  echo "WARNING: this QR encodes live credentials — do not show it on a shared screen or stream."
+  echo ""
+} >&2
+
+if [[ "$PRINT_PAYLOAD" == "1" ]]; then
+  printf '%s\n' "$PAYLOAD_URL"
+fi
+
+# Render via npx (no system packages). NOTE: qrcode-terminal's bin reads argv
+# only when stdin is a TTY, so the payload MUST be piped via stdin.
+if [[ "$SMALL" == "1" ]]; then
+  # The CLI exposes no --small flag, so reach the vendored lib API through the
+  # npx-installed package (still npx-invoked, no system packages, no vendoring).
+  printf '%s' "$PAYLOAD_URL" | npx --yes -p qrcode-terminal -c \
+    'node -e "const fs=require(\"fs\"),path=require(\"path\"),cp=require(\"child_process\");const bin=cp.execSync(\"command -v qrcode-terminal\").toString().trim();const lib=require(path.join(path.dirname(fs.realpathSync(bin)),\"..\",\"lib\",\"main.js\"));let d=\"\";process.stdin.setEncoding(\"utf8\");process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>lib.generate(d.trim(),{small:true}));"'
+else
+  printf '%s' "$PAYLOAD_URL" | npx --yes qrcode-terminal
+fi

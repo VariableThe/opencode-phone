@@ -1,0 +1,5 @@
+v0.4.14 — Quieter, more useful crash reporting
+
+• Connection problems on your own network (timeouts, unreachable server) are no longer filed as crash reports — they were never bugs in the app.
+• Repeated identical errors are now reported once instead of hundreds of times.
+• Real crashes are still reported in full, and unaffected by the above.

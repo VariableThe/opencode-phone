@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Run Claude Code on Android — OpenCode Mobile</title>
+<meta name="description" content="Use Claude Sonnet, Opus, or Haiku as your AI coding engine on Android. OpenCode Mobile connects to an opencode server powered by Claude — full agent, streaming responses, diff viewer, from your phone." />
+<meta name="keywords" content="claude code android, run claude code on android, use claude sonnet on android phone, claude code mobile, anthropic claude android app, claude ai coding android, claude opus android coding, opencode claude android" />
+<meta name="theme-color" content="#3b82f6" />
+<link rel="canonical" href="https://dzianisv.github.io/opencode-mobile/claude-code-android/" />
+<link rel="icon" type="image/png" href="../fdroid/repo/icons/icon.png" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="OpenCode Mobile" />
+<meta property="og:title" content="Run Claude Code on Android — OpenCode Mobile" />
+<meta property="og:description" content="Use Claude Sonnet, Opus, or Haiku as your AI coding engine on Android. OpenCode Mobile connects to an opencode server powered by Claude — full agent, streaming responses, diff viewer, from your phone." />
+<meta property="og:url" content="https://dzianisv.github.io/opencode-mobile/claude-code-android/" />
+<meta property="og:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Run Claude Code on Android — OpenCode Mobile" />
+<meta name="twitter:description" content="Use Claude Sonnet, Opus, or Haiku as your AI coding engine on Android. OpenCode Mobile + opencode server = Claude Code from your phone." />
+<meta name="twitter:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Structured data: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "OpenCode Mobile", "item": "https://dzianisv.github.io/opencode-mobile/" },
+    { "@type": "ListItem", "position": 2, "name": "Claude Code on Android", "item": "https://dzianisv.github.io/opencode-mobile/claude-code-android/" }
+  ]
+}
+</script>
+
+<!-- Structured data: Article -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Run Claude Code on Android — OpenCode Mobile",
+  "description": "How to use Claude Sonnet, Opus, or Haiku as an AI coding agent on your Android phone via OpenCode Mobile and an opencode server.",
+  "url": "https://dzianisv.github.io/opencode-mobile/claude-code-android/",
+  "datePublished": "2026-06-05",
+  "dateModified": "2026-06-05",
+  "author": { "@type": "Organization", "name": "VIBE TECHNOLOGIES, LLC" },
+  "publisher": { "@type": "Organization", "name": "OpenCode Mobile" }
+}
+</script>
+
+<!-- Structured data: FAQPage -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Can I run Claude Code on Android?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. OpenCode Mobile is a native Android app that connects to an opencode server configured to use Claude (Sonnet, Opus, Haiku, or any Anthropic model). You get a full AI coding agent experience — streaming responses, file diffs, tool call approval — from your Android phone. Anthropic does not publish an official Claude Code Android app; OpenCode Mobile is the practical alternative."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which Claude models does OpenCode Mobile support?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "OpenCode Mobile works with any model that your opencode server supports. OpenCode supports the full Anthropic model family including Claude Sonnet (claude-sonnet-4-5, claude-3-5-sonnet-20241022), Claude Opus (claude-opus-4), and Claude Haiku. You configure the model on the server with your own Anthropic API key — the app streams whatever the server produces."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need an Anthropic API key?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes — to use Claude models you need an Anthropic API key, which you configure on your opencode server (not in the app). You can get one at console.anthropic.com. OpenCode also supports other providers (OpenAI, Gemini, local models via Ollama) so you can switch models on the server without reinstalling anything."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is this the official Claude Code app for Android?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No — OpenCode Mobile is an independent open-source project, not an official Anthropic product. It connects to the open-source opencode agent (github.com/sst/opencode), which supports Claude as one of its AI backends. Anthropic does not publish an official Claude Code mobile app as of mid-2026."
+      }
+    }
+  ]
+}
+</script>
+
+<style>
+:root{--bg:#0b0f17;--bg-soft:#121826;--card:#161d2e;--border:#243049;--text:#e6ebf5;--muted:#9aa6be;--accent:#3b82f6;--accent-2:#2563eb;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+section{padding:36px 0;border-top:1px solid var(--border)}
+section:first-of-type{border-top:none}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h1{font-size:2.1rem}
+h2{font-size:1.4rem;margin-top:.2em}
+h3{font-size:1.1rem;margin-top:1.4em}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg-soft);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:.9em;word-break:break-all;}
+pre{background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;}
+pre code{background:none;border:none;padding:0;word-break:normal}
+.crumbs{font-size:.9rem;color:var(--muted);padding-top:24px}
+.crumbs a{color:var(--muted)}
+.crumbs a:hover{color:var(--accent)}
+.lead{font-size:1.12rem;color:var(--muted)}
+.muted{color:var(--muted)}
+ul li,ol li{margin-bottom:6px}
+
+/* Feature list */
+.features{list-style:none;padding:0;margin:0;display:grid;gap:14px;grid-template-columns:1fr}
+.features li{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.features b{color:var(--text)}
+.features span{color:var(--muted);display:block;font-size:.95rem}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:16px 0}
+.card h3{margin-top:0;font-size:1.05rem}
+
+/* Steps block */
+.steps-block{background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:16px 0}
+.steps-block h3{margin-top:0;font-size:1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.steps-block ol{margin:0;padding-left:1.3em}
+.steps-block li{margin-bottom:10px}
+
+/* Note */
+.note{background:var(--bg-soft);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:16px 18px;color:var(--muted)}
+.note strong{color:var(--text)}
+
+/* Model table */
+.table-wrap{overflow-x:auto;margin:24px 0}
+table{width:100%;border-collapse:collapse;font-size:.97rem}
+thead tr{background:var(--card)}
+th,td{padding:11px 14px;border:1px solid var(--border);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.88rem;text-transform:uppercase;letter-spacing:.03em}
+td:first-child{font-weight:500}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.8rem;font-weight:600}
+.badge-fast{background:#1e3a5f;color:#60a5fa}
+.badge-smart{background:#1e3a2a;color:#4ade80}
+.badge-cheap{background:#3a2a1e;color:#fbbf24}
+
+/* CTA */
+.cta-box{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:22px 24px;margin:28px 0;display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between}
+.cta-box p{margin:0;font-size:1.05rem}
+.btn{display:inline-block;background:var(--accent);color:#fff;font-weight:600;padding:10px 22px;border-radius:8px;font-size:.97rem;white-space:nowrap}
+.btn:hover{background:var(--accent-2);text-decoration:none}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);background:transparent}
+
+/* FAQ */
+.faq details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:0 18px;margin-bottom:12px}
+.faq summary{cursor:pointer;padding:16px 0;font-weight:600;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;color:var(--accent);font-weight:700}
+.faq details[open] summary::after{content:"\2212"}
+.faq details[open] summary{border-bottom:1px solid var(--border)}
+.faq details p{color:var(--muted);margin:14px 0 16px}
+
+footer{border-top:1px solid var(--border);padding:32px 0 48px;text-align:center;color:var(--muted);font-size:.9rem;}
+footer a{margin:0 8px}
+@media(min-width:680px){h1{font-size:2.5rem}.features{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="../">OpenCode Mobile</a> &rsaquo; Claude Code on Android
+  </nav>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <h1>Run Claude Code on Android — OpenCode Mobile</h1>
+    <p class="lead">
+      Anthropic's Claude is one of the most capable AI coding models available. If you've been
+      searching for a way to use Claude Code on your Android phone — to review PRs, hotfix bugs,
+      or write code from anywhere — OpenCode Mobile is the answer. It connects to an
+      <a href="https://github.com/sst/opencode">opencode</a> server configured with your
+      Anthropic API key and gives you a full native Android interface to Claude's coding abilities.
+    </p>
+    <div class="cta-box">
+      <p>Free and open-source. Bring your own Anthropic API key.</p>
+      <a class="btn" href="../download/">Download for Android</a>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works">
+  <div class="wrap">
+    <h2>How Claude Code works on Android</h2>
+    <p>
+      Anthropic does not publish an official Claude Code mobile app for Android. The way to get
+      Claude's coding capabilities on your phone is to connect to an agentic runtime that uses
+      Claude as its AI engine — and that's exactly what OpenCode Mobile does.
+    </p>
+    <p>
+      Here's the architecture in plain terms:
+    </p>
+    <ol>
+      <li>You run <strong>opencode</strong> (the open-source AI coding agent) on your machine — laptop, desktop, or VPS.</li>
+      <li>You configure opencode to use <strong>Claude</strong> (Sonnet, Opus, Haiku, or any Anthropic model) with your own Anthropic API key.</li>
+      <li><strong>OpenCode Mobile</strong> on your Android phone connects to that server over the network.</li>
+      <li>You chat with Claude from your phone — the app streams responses in real time, shows diffs of file changes, and lets you approve or reject what the agent does.</li>
+    </ol>
+    <p>
+      The result is the full power of Claude's coding abilities — multi-file context, shell command
+      execution, web search, test running — controlled from a native Android app designed for
+      touch screens.
+    </p>
+
+    <div class="note">
+      <strong>Note on terminology:</strong> "Claude Code" is Anthropic's own CLI tool.
+      OpenCode Mobile uses the open-source <em>opencode</em> agent (by SST), which supports
+      Claude as one of its AI backends. The experience is similar — an AI agent that reads your
+      code, runs commands, and proposes changes — but the runtime is opencode, not Anthropic's CLI.
+    </div>
+  </div>
+</section>
+
+<section id="claude-models">
+  <div class="wrap">
+    <h2>Which Claude models can I use?</h2>
+    <p>
+      OpenCode supports the full Anthropic model family. You pick the model in the opencode server
+      config file; the app streams whatever the server produces. Here's how the main options compare
+      for coding tasks:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Best for</th>
+            <th>Speed</th>
+            <th>Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Claude Sonnet 4 / 3.5<br><span style="font-weight:400;color:var(--muted);font-size:.9rem">claude-sonnet-4-5</span></td>
+            <td><span class="badge badge-smart">Most coding tasks</span> — strong reasoning, large context, good tool use</td>
+            <td>Fast</td>
+            <td>Mid</td>
+          </tr>
+          <tr>
+            <td>Claude Opus 4<br><span style="font-weight:400;color:var(--muted);font-size:.9rem">claude-opus-4</span></td>
+            <td><span class="badge badge-smart">Complex refactors</span> — highest reasoning capability for hard architectural problems</td>
+            <td>Slower</td>
+            <td>Higher</td>
+          </tr>
+          <tr>
+            <td>Claude Haiku 3.5<br><span style="font-weight:400;color:var(--muted);font-size:.9rem">claude-3-5-haiku-20241022</span></td>
+            <td><span class="badge badge-fast">Quick edits &amp; questions</span> — fastest responses, lowest cost, great for simple tasks</td>
+            <td>Very fast</td>
+            <td>Low</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      You can switch models by editing the opencode config on the server — no app update required.
+      OpenCode also supports OpenAI (GPT-4o, o3), Google Gemini, AWS Bedrock, and local models
+      via Ollama, so you're not locked in to Anthropic.
+    </p>
+  </div>
+</section>
+
+<section id="what-you-get">
+  <div class="wrap">
+    <h2>What you get with Claude on Android</h2>
+    <p>
+      This is not a chat window where you paste code and copy suggestions back. OpenCode Mobile
+      with Claude gives you a full coding agent that:
+    </p>
+    <ul class="features">
+      <li>
+        <b>Reads your entire codebase</b>
+        <span>Claude gets full file-tree access via the opencode server. Ask it to trace a bug across 20 files and it will — no pasting required.</span>
+      </li>
+      <li>
+        <b>Writes and applies changes</b>
+        <span>Claude proposes diffs; you see them in the app's inline viewer and approve or reject per file. Changes apply to the real filesystem on your server.</span>
+      </li>
+      <li>
+        <b>Runs shell commands</b>
+        <span>Need to run tests, build the project, or check a log? Claude can execute shell commands on your machine via the opencode tool-call system.</span>
+      </li>
+      <li>
+        <b>Streams token by token</b>
+        <span>Responses stream live to your phone — you see Claude "thinking" in real time, not a long wait followed by a wall of text.</span>
+      </li>
+      <li>
+        <b>Works across sessions</b>
+        <span>Sessions persist on the server. Pick up a long coding conversation exactly where you left off, even if you closed the app or switched networks.</span>
+      </li>
+      <li>
+        <b>Protects your API key</b>
+        <span>Your Anthropic key lives on the server, not the phone. The app stores only your server URL and access password in the Android Keystore.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="setup">
+  <div class="wrap">
+    <h2>Setting up Claude on Android: step by step</h2>
+
+    <div class="steps-block">
+      <h3>Step 1 — Install opencode on your machine</h3>
+      <ol>
+        <li>Install Node.js 20+ if you don't already have it.</li>
+        <li>Install opencode globally:
+          <pre style="margin-top:8px"><code>npm install -g opencode-ai</code></pre>
+        </li>
+      </ol>
+    </div>
+
+    <div class="steps-block">
+      <h3>Step 2 — Configure Claude as the AI provider</h3>
+      <ol>
+        <li>Get an Anthropic API key from <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>.</li>
+        <li>Create or edit <code>~/.config/opencode/config.json</code>:
+          <pre style="margin-top:8px"><code>{
+  "provider": {
+    "anthropic": {
+      "apiKey": "sk-ant-your-key-here"
+    }
+  },
+  "model": "claude-sonnet-4-5"
+}</code></pre>
+        </li>
+        <li>Or set it as an environment variable if you prefer not to write the key to disk:
+          <pre style="margin-top:8px"><code>export ANTHROPIC_API_KEY=sk-ant-your-key-here</code></pre>
+        </li>
+      </ol>
+    </div>
+
+    <div class="steps-block">
+      <h3>Step 3 — Start the opencode server</h3>
+      <ol>
+        <li>Start the server, binding to all interfaces so your phone can reach it:
+          <pre style="margin-top:8px"><code>OPENCODE_SERVER_PASSWORD=yourpassword opencode serve --hostname 0.0.0.0 --port 4096</code></pre>
+        </li>
+        <li>From your phone's browser, verify: <code>http://&lt;machine-ip&gt;:4096/global/health</code> should return <code>{"healthy":true}</code>.</li>
+      </ol>
+    </div>
+
+    <div class="steps-block">
+      <h3>Step 4 — Make the server reachable from anywhere</h3>
+      <ol>
+        <li>Install <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale</a> on both your machine and your Android phone (free tier works).</li>
+        <li>Note your machine's Tailscale IP (e.g. <code>100.x.x.x</code>) from the Tailscale app.</li>
+        <li>Your server URL becomes: <code>http://100.x.x.x:4096</code></li>
+      </ol>
+      <p style="margin:8px 0 0;color:var(--muted)">Alternatives: same LAN Wi-Fi, Cloudflare Tunnel, ngrok. See the <a href="../guide/">full guide</a> for details on each.</p>
+    </div>
+
+    <div class="steps-block">
+      <h3>Step 5 — Install OpenCode Mobile and connect</h3>
+      <ol>
+        <li>On your phone, install OpenCode Mobile via <a href="../download/">F-Droid or direct APK</a>.</li>
+        <li>Tap <strong>Add Connection</strong>.</li>
+        <li>Enter your server URL (<code>http://100.x.x.x:4096</code>) and the password you set.</li>
+        <li>Tap <strong>Connect</strong>. You're now running Claude Code on Android.</li>
+      </ol>
+    </div>
+
+    <p>
+      Total setup time: about 15 minutes. After that, opening a new coding session with Claude
+      from your phone takes seconds.
+    </p>
+  </div>
+</section>
+
+<section id="use-cases">
+  <div class="wrap">
+    <h2>What people use Claude on Android for</h2>
+
+    <div class="card">
+      <h3>Code review anywhere</h3>
+      <p>
+        Get a review request while away from your desk. Open OpenCode Mobile, connect, and ask
+        Claude to pull the branch, summarize the changes, and flag anything risky. Claude reads
+        the full diff from your machine — not just what you paste — and explains it in plain English.
+        You can drill in with follow-up questions, ask for specific suggestions, and even apply
+        fixes from your phone before you get back to a laptop.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Debugging production incidents</h3>
+      <p>
+        Something goes wrong at 11pm and you're not at your computer. Open the app, describe
+        the symptom, and let Claude locate the relevant code, trace the execution path, and
+        propose a fix. You review the diff on your phone, approve it, and your CI pipeline kicks
+        off — all without a laptop. Claude's strong reasoning makes it particularly good at
+        connecting dots across multiple files and log outputs.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Writing code during idle time</h3>
+      <p>
+        Commuting, waiting in a queue, between meetings. Short bursts of directed AI coding can
+        scaffold a new feature, write tests for an existing function, or refactor a messy module.
+        Claude handles the actual code; you approve the diffs. The streaming UI makes it feel
+        responsive even on a mobile connection.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Learning a new codebase</h3>
+      <p>
+        Onboarding to a new project or returning to old code after months away? Claude with full
+        file access can map the architecture, explain how a function is called, trace data flow
+        from endpoint to database, and answer "why is this done this way?" questions by reading
+        the actual code — not a stale summary you typed into a chat.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Writing and running tests</h3>
+      <p>
+        Ask Claude to write unit tests for a function. It reads the function, writes the tests,
+        runs them via the opencode shell tool, sees the failures, and iterates — all without you
+        doing anything except reviewing the final output. From your phone, you get the full
+        red-green-refactor loop.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <h2>Privacy: where your code goes</h2>
+    <p>
+      When you use Claude via OpenCode Mobile:
+    </p>
+    <ul>
+      <li>Your prompts and code go from your phone → to your opencode server → to Anthropic's Claude API. <strong>OpenCode Mobile itself never sees or stores your code.</strong></li>
+      <li>The path from phone to server is over your private network (LAN or Tailscale) — not through any third-party relay.</li>
+      <li>The path from server to Claude is via Anthropic's standard API — subject to <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</li>
+      <li>If data privacy is critical, you can configure opencode to use a local model (e.g. Ollama + a code-capable LLM) so no data ever leaves your network.</li>
+    </ul>
+    <p>
+      Your Anthropic API key lives in the opencode server config on your machine — not in the app,
+      not in any cloud service. The app stores only your server URL and access password, encrypted
+      in the Android Keystore.
+    </p>
+  </div>
+</section>
+
+<section id="vs-claude-code">
+  <div class="wrap">
+    <h2>OpenCode Mobile vs. Anthropic's Claude Code CLI</h2>
+    <p>
+      Anthropic publishes <strong>Claude Code</strong> as a CLI tool for desktop/laptop use.
+      OpenCode Mobile is not a replacement for that — it's the mobile interface to the
+      <em>opencode</em> agent, which is a separate open-source project that happens to support
+      Claude among other models.
+    </p>
+    <p>
+      Practical differences:
+    </p>
+    <ul>
+      <li>Anthropic's Claude Code CLI is designed for terminal use on macOS/Linux. There is no official Android client.</li>
+      <li>OpenCode (the runtime OpenCode Mobile connects to) is designed from the ground up as a server with an HTTP API, making it suitable for remote clients like a mobile app.</li>
+      <li>OpenCode Mobile adds the native Android UI layer: touch-optimised chat, diff viewer, biometric unlock, credential storage — things that have no equivalent in a CLI tool.</li>
+      <li>You can run opencode alongside Claude Code CLI on the same machine — they don't conflict.</li>
+    </ul>
+    <p>
+      If you use Claude Code on your laptop and want to do lighter tasks from your phone,
+      OpenCode Mobile with Claude is the natural complement.
+    </p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Frequently asked questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Can I run Claude Code on Android?</summary>
+        <p>Yes — via OpenCode Mobile. The app connects to an opencode server configured with your Anthropic API key, giving you Claude's full coding abilities from your Android phone. Anthropic does not publish an official Claude Code Android app; this is the practical alternative.</p>
+      </details>
+      <details>
+        <summary>Which Claude models does OpenCode Mobile support?</summary>
+        <p>OpenCode Mobile works with any model your opencode server supports. For Claude, that includes Sonnet 4 / 3.5, Opus 4, and Haiku 3.5. You set the model in the opencode config file on the server. You can change it at any time without updating the app.</p>
+      </details>
+      <details>
+        <summary>Do I need an Anthropic API key?</summary>
+        <p>Yes — to use Claude models you need an Anthropic API key configured on your opencode server. You can get one from <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. OpenCode also supports other providers, so you can use OpenAI, Gemini, or a local model if you prefer.</p>
+      </details>
+      <details>
+        <summary>Is this the official Claude android app?</summary>
+        <p>No. OpenCode Mobile is an independent open-source project (MIT licensed), not an official Anthropic product. It connects to the open-source opencode agent, which supports Claude as an AI backend. Anthropic has not published an official Claude coding agent app for Android.</p>
+      </details>
+      <details>
+        <summary>How much does it cost to use Claude via OpenCode Mobile?</summary>
+        <p>OpenCode Mobile itself is free. Claude usage is billed by Anthropic based on tokens — the same pricing as using Claude via any API client. Claude Haiku is the most affordable option; Sonnet offers the best balance of cost and capability for most coding tasks. See <a href="https://www.anthropic.com/pricing" target="_blank" rel="noopener">Anthropic's pricing page</a> for current rates.</p>
+      </details>
+      <details>
+        <summary>Does it work if I'm not on Wi-Fi?</summary>
+        <p>Yes. As long as your phone can reach your opencode server — over mobile data via Tailscale, or any other reachable URL — it works on cellular connections. The SSE streaming protocol is efficient and tolerates brief network hiccups gracefully.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="get-started">
+  <div class="wrap">
+    <h2>Get started with Claude on Android today</h2>
+    <p>
+      OpenCode Mobile is free, open-source, and available now on Android via F-Droid or direct APK.
+      You need a machine running <code>opencode serve</code> and an Anthropic API key — both
+      of which you can set up in under 15 minutes by following the
+      <a href="../guide/">complete setup guide</a>.
+    </p>
+    <div class="cta-box">
+      <p>Claude Code on your Android phone — no official app needed.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="../download/">Download OpenCode Mobile</a>
+        <a class="btn btn-ghost" href="../guide/">Setup guide</a>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:16px">
+      Also see: <a href="../features/">full feature list</a> &middot;
+      <a href="../comparison/">OpenCode Mobile vs ChatGPT &amp; Copilot</a> &middot;
+      <a href="../vs-termux/">vs Termux</a> &middot;
+      <a href="../troubleshooting/">troubleshooting connection issues</a>
+    </p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="../">Home</a>
+      <a href="../download/">Download</a>
+      <a href="../guide/">Setup guide</a>
+      <a href="../features/">Features</a>
+      <a href="../comparison/">Comparison</a>
+      <a href="../vs-termux/">vs Termux</a>
+      <a href="../troubleshooting/">Troubleshooting</a>
+      <a href="https://github.com/dzianisv/opencode-mobile">GitHub</a>
+      <a href="../privacy/">Privacy policy</a>
+    </p>
+    <p class="muted">Free and open-source. Built by VIBE TECHNOLOGIES, LLC. Not affiliated with Anthropic or the OpenCode upstream project.</p>
+  </div>
+</footer>
+
+</body>
+</html>

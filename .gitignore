@@ -1,0 +1,13 @@
+# Monorepo root ignores (the app tree keeps its own .gitignore too).
+node_modules/
+dist/
+build/
+.expo/
+__pycache__/
+*.apk
+*.aab
+*.jks
+*.keystore
+.env
+.env.*
+keystores/

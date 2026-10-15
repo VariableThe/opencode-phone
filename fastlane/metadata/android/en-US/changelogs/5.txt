@@ -1,0 +1,6 @@
+v0.4.3 — reliability fixes
+
+- Fixed sessions becoming invisible: create, list, and resume now share one directory scope (#10)
+- Fixed creating a session in a custom directory using the server's directory instead of stray input
+- Fixed spurious error flash and refreshing the wrong session when a send failed
+- Stability and packaging improvements

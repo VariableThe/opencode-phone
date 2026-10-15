@@ -1,0 +1,692 @@
+{
+  "common": {
+    "cancel": "取消",
+    "ok": "确定",
+    "error": "错误",
+    "delete": "删除",
+    "retry": "重试",
+    "save": "保存",
+    "close": "关闭",
+    "shareReport": "分享报告"
+  },
+  "settings": {
+    "sections": {
+      "security": "安全",
+      "appearance": "外观",
+      "notifications": "通知",
+      "ntfy": "ntfy（需要自建 ntfy 服务器）",
+      "privacy": "隐私",
+      "about": "关于",
+      "inapp": "应用内 / 后台（无需额外服务）"
+    },
+    "appearance": {
+      "matchServerTheme": {
+        "label": "跟随服务器主题",
+        "descriptionOn": "正在使用活动服务器的“{{name}}”主题",
+        "descriptionOff": "改用设备的浅色/深色外观"
+      }
+    },
+    "security": {
+      "biometricOpen": {
+        "label": "解锁时需要生物识别",
+        "descriptionEnabled": "使用 Face ID 或 Touch ID 解锁应用",
+        "descriptionUnavailable": "生物识别功能不可用"
+      },
+      "biometricSend": {
+        "label": "发送消息时需要生物识别",
+        "description": "发送消息前需要验证身份"
+      },
+      "lockNow": {
+        "label": "立即锁定应用",
+        "description": "重新打开时需要验证身份"
+      }
+    },
+    "notifications": {
+      "disabledNotice": "通知已在系统层面关闭。请在系统设置中启用通知以接收提醒。"
+    },
+    "ntfy": {
+      "enabled": {
+        "label": "通过 ntfy 接收代理提醒",
+        "description": "轮询自托管 ntfy 主题，获取权限、空闲和错误提醒"
+      },
+      "baseUrl": {
+        "label": "ntfy 服务器地址",
+        "description": "Tailnet 上自托管 ntfy 服务器的基础地址"
+      },
+      "topic": {
+        "label": "主题",
+        "description": "必须与代理端的 NTFY_TOPIC 一致"
+      },
+      "testButton": "发送测试通知",
+      "testing": "正在发布并监听…",
+      "statusListening": "正在监听代理提醒",
+      "statusOff": "已关闭 — 启用后即可接收代理提醒",
+      "lastReceived": "上次收到：{{title}}",
+      "lastError": "上次错误：{{detail}}",
+      "foregroundNote": "仅在应用运行时送达。无法唤醒已关闭的应用——未配置 FCM 或前台服务。",
+      "alerts": {
+        "testOkTitle": "已收到测试通知",
+        "testOkMessage": "往返确认：{{detail}}。",
+        "testFailedTitle": "测试失败",
+        "enableFirstTitle": "监听器未开启",
+        "enableFirstMessage": "请先启用代理提醒，再发送测试。"
+      }
+    },
+    "privacy": {
+      "crashReporting": {
+        "label": "崩溃报告与使用分析",
+        "description": "分享匿名崩溃报告（Sentry）和使用分析（PostHog），帮助改进 OpenCode。您分享的诊断报告也会发送至我们的支持收件箱。不包含代码或提示词内容。"
+      },
+      "privacyPolicy": {
+        "label": "隐私政策",
+        "description": "我们收集哪些数据及收集方式"
+      }
+    },
+    "about": {
+      "version": "版本",
+      "github": {
+        "label": "GitHub",
+        "description": "查看源代码"
+      },
+      "docs": {
+        "label": "文档",
+        "description": "了解如何使用 OpenCode"
+      }
+    },
+    "language": {
+      "label": "语言",
+      "title": "选择语言",
+      "system": "跟随系统",
+      "en": "English",
+      "zhHans": "简体中文"
+    },
+    "footer": {
+      "appName": "OpenCode Mobile",
+      "tagline": "随时随地连接您的 AI 编程助手"
+    },
+    "alerts": {
+      "privacyNotSavedTitle": "隐私设置未保存",
+      "privacyNotSavedMessage": "本次会话已关闭崩溃报告，但您的选择未能保存。请重试。",
+      "notificationsDisabledTitle": "通知已关闭",
+      "notificationsDisabledMessage": "请在设备设置中为 OpenCode 启用通知以接收提醒。"
+    },
+    "inapp": {
+      "poll": {
+        "label": "后台检查",
+        "description": "在后台运行时约每 15 分钟重新检查一次被关注的会话（受系统节流，省电模式下可能延迟）"
+      },
+      "foreground": {
+        "label": "常驻观察者（Android）",
+        "description": "保持前台服务每 60 秒轮询一次，以及时提醒。会显示一条常驻通知，并消耗更多电量。"
+      },
+      "limits": "后台检查无法可靠地唤醒被杀死的应用——强制停止后请重新打开应用。只有常驻观察者能在应用被滑掉后继续提醒；重启手机后必须先打开一次应用才能恢复。"
+    }
+  },
+  "session": {
+    "titleFallback": "会话",
+    "toolbar": {
+      "auto": "自动"
+    },
+    "banners": {
+      "reconnecting": "正在重新连接…（第 {{attempt}} 次尝试）",
+      "connected": "已连接 ✓",
+      "reverted": "消息已撤回 — 重新发送以确认",
+      "undo": "撤销",
+      "dismiss": "忽略"
+    },
+    "sheet": {
+      "thinking": "思考过程",
+      "tool": "工具",
+      "input": "输入",
+      "result": "结果",
+      "error": "错误",
+      "file": "文件"
+    },
+    "empty": {
+      "title": "开始一段对话",
+      "hint": "输入 / 使用命令"
+    },
+    "loadingOlder": "正在加载更早的消息...",
+    "input": {
+      "placeholderListening": "正在聆听...",
+      "placeholderFollowUp": "发送后续消息...",
+      "placeholderDefault": "输入消息..."
+    },
+    "actions": {
+      "editMessage": "编辑消息",
+      "replace": "替换",
+      "selectText": "选择文本",
+      "copyAll": "复制全部",
+      "copied": "已复制"
+    },
+    "alerts": {
+      "messageActionsTitle": "消息操作",
+      "notSupportedTitle": "不支持此操作",
+      "notSupportedMessage": "编辑已发送的消息需要更新的 opencode 服务器版本。请更新服务器后重试。",
+      "revertAuthFailedTitle": "身份验证失败",
+      "revertAuthFailedMessage": "您的服务器凭据被拒绝。请检查连接后重试。",
+      "editFailedTitle": "编辑失败",
+      "editFailedMessage": "无法撤回到该消息。请重试。",
+      "replaceDraftTitle": "替换草稿？",
+      "replaceDraftMessage": "输入框中有未发送的消息。编辑此消息将替换它。",
+      "cameraPermissionTitle": "需要权限",
+      "cameraPermissionMessage": "拍照需要相机访问权限。",
+      "emptyClipboardTitle": "剪贴板为空",
+      "emptyClipboardMessage": "剪贴板中没有文本或图片。",
+      "authRequiredTitle": "需要身份验证",
+      "authRequiredMessage": "发送消息需要生物识别验证。请重试。",
+      "sendFailedTitle": "消息未发送",
+      "sendFailedMessage": "无法发送您的消息。请检查连接后重试。",
+      "replyFailedTitle": "回复失败",
+      "replyFailedMessage": "无法发送您的回复。请重试。",
+      "rejectFailedTitle": "拒绝失败",
+      "rejectFailedMessage": "无法发送您的回复。请重试。",
+      "imageFailedTitle": "图片未添加",
+      "imageFailedMessage": "一张或多张图片无法处理。请尝试其他照片。",
+      "speechErrorTitle": "语音输入失败",
+      "speechErrorMessage": "无法使用语音输入。请检查麦克风权限后重试。",
+      "switchFailedTitle": "切换失败",
+      "switchFailedMessage": "服务器未确认切换。请检查连接后重试。"
+    }
+  },
+  "connection": {
+    "shared": {
+      "connectionType": "连接类型",
+      "types": {
+        "local": "本地",
+        "tunnel": "隧道",
+        "cloud": "云端"
+      },
+      "name": "名称",
+      "namePlaceholder": "我的服务器",
+      "serverUrl": "服务器地址",
+      "directoryOptional": "项目目录（可选）",
+      "authentication": "身份验证",
+      "username": "用户名",
+      "password": "密码",
+      "alerts": {
+        "enterName": "请输入连接名称",
+        "enterUrl": "请输入服务器地址",
+        "invalidUrlTitle": "地址无效",
+        "invalidUrlMessage": "请输入服务器地址 —— 192.168.1.100、my-mac.tailnet.ts.net，或完整地址如 http://192.168.1.100:4096",
+        "connectionFailedTitle": "连接失败",
+        "unknownError": "未知错误",
+        "saveFailedTitle": "无法保存连接",
+        "saveFailedMessage": "连接测试成功，但保存失败，请重试。"
+      }
+    },
+    "add": {
+      "quick": {
+        "title": "连接到 OpenCode",
+        "subtitle": "输入您电脑的 IP 地址进行连接",
+        "ipAddressLabel": "IP 地址或主机名",
+        "nameOptionalLabel": "名称（可选）",
+        "namePlaceholder": "我的 Mac",
+        "passwordIfSetLabel": "密码（如服务器已设置）",
+        "passwordPlaceholder": "留空表示无密码",
+        "usernameHintPrefix": "用户名默认为 ",
+        "usernameHintMiddle": "。需要自定义用户名？请使用",
+        "usernameHintSuffix": "。",
+        "advancedOptionsLink": "高级选项",
+        "connectButton": "连接",
+        "helpTitle": "如何查找您的 IP 地址：",
+        "helpMacPrefix": "在您的 Mac 上运行：",
+        "helpTailscalePrefix": "Tailscale 示例：",
+        "helpProtocolPrefix": "本地和 Tailscale 地址请使用 ",
+        "helpProtocolMiddle": "，除非已配置 TLS，此时请使用 ",
+        "helpProtocolSuffix": "。",
+        "helpRunningPrefix": "请确保 OpenCode 正在运行：",
+        "connectCardTitle": "OpenCode Connect",
+        "connectCardBadge": "即将上线",
+        "connectCardDesc": "将手机桥接到您的 opencode 服务器 — 无需配置隧道或防火墙。一键连接，随时随地。",
+        "advancedLink": "高级选项（隧道、云端、身份验证）"
+      },
+      "waitlist": {
+        "successText": "您已加入候补名单 — OpenCode Connect 准备就绪时我们会通过邮件通知您。",
+        "joinButton": "加入候补名单",
+        "alertTitle": "加入候补名单",
+        "queuedText": "已保存在此设备上 — 联网后我们会自动完成注册，你无需再做任何操作。",
+        "emailUsLink": "仍然无法注册？改为给我们发邮件",
+        "emailUsButton": "发送邮件",
+        "queueFailedMessage": "无法连接注册服务，也无法在此设备上保存你的请求。你可以改为给我们发邮件，我们会手动将你加入名单。",
+        "noMailAppMessage": "没有可用的邮件应用。请发送邮件至 support@agentlabs.cc，主题为 \"OpenCode Connect Waitlist\"。"
+      },
+      "advanced": {
+        "backToQuick": "简易模式",
+        "urlHintPrefix": "本地/Tailscale 示例：",
+        "urlHintOr": " 或 ",
+        "urlHintUse": "。仅在已配置 TLS 时使用 ",
+        "urlHintSuffix": "。",
+        "directoryHint": "留空则使用服务器的当前目录，或指定一个路径以在其他文件夹中工作。",
+        "saveButton": "保存连接"
+      },
+      "alerts": {
+        "enterIp": "请输入您电脑的 IP 地址",
+        "connectionFailedMessage": "{{summary}}\n\n目标：{{target}}\n错误：{{error}}"
+      }
+    },
+    "edit": {
+      "notFound": "未找到该连接",
+      "directoryHint": "留空则使用服务器的当前目录。新会话将在此文件夹中创建。",
+      "passwordLabel": "密码（留空则保留原密码）",
+      "testButton": "测试连接",
+      "saveButton": "保存更改",
+      "deleteButton": "删除连接",
+      "browseFiles": "浏览文件",
+      "browseHint": "从默认项目目录开始浏览此服务器上的文件。",
+      "defaultProjectDir": "默认项目目录（可选）",
+      "alerts": {
+        "successTitle": "成功",
+        "successMessage": "连接成功！",
+        "connectionFailedMessage": "{{summary}}\n\n（{{detail}}）",
+        "noDetail": "无详细信息",
+        "deleteTitle": "删除连接",
+        "deleteMessage": "确定要删除 \"{{name}}\" 吗？"
+      }
+    }
+  },
+  "nav": {
+    "sessionsTab": "会话",
+    "connectionsTab": "连接",
+    "settingsTab": "设置",
+    "addConnectionTitle": "添加连接",
+    "editConnectionTitle": "编辑连接",
+    "tailscaleImportTitle": "从 Tailscale 导入",
+    "qrScanTitle": "扫描二维码"
+  },
+  "connectionsList": {
+    "activeBadge": "当前使用",
+    "lastConnected": "上次连接：{{date}}",
+    "importButton": "从 Tailscale 导入",
+    "status": {
+      "reachable": "可连接",
+      "authRequired": "需要登录",
+      "unreachable": "无法连接",
+      "checking": "检查中…",
+      "unknown": "未检查"
+    },
+    "actionsAlert": {
+      "message": "您想执行什么操作？",
+      "browse": "浏览文件",
+      "edit": "编辑"
+    },
+    "empty": {
+      "title": "暂无连接",
+      "subtitle": "添加一个 OpenCode 服务器连接"
+    },
+    "header": "点击切换，长按查看更多选项",
+    "preferences": {
+      "title": "偏好设置",
+      "pageSizeLabel": "每页消息数",
+      "pageSizeHint": "打开会话时加载的消息数量。数值越小加载越快。"
+    }
+  },
+  "sessionsList": {
+    "untitledSession": "未命名会话",
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    },
+    "filesCount": "{{count}} 个文件",
+    "actions": {
+      "rename": "重命名"
+    },
+    "alerts": {
+      "renameFailedTitle": "重命名失败",
+      "renameFailedMessage": "无法重命名该会话。请重试。",
+      "deleteTitle": "删除会话",
+      "deleteMessage": "删除 \"{{title}}\"？",
+      "deleteFailedTitle": "删除失败",
+      "deleteFailedMessage": "无法删除该会话。请重试。",
+      "createFailedMessage": "创建会话失败。请检查网络连接后重试。"
+    },
+    "empty": {
+      "noConnectionTitle": "无连接",
+      "noConnectionSubtitle": "连接到运行 opencode serve 的电脑（同一网络或通过 Tailscale）以开始使用。",
+      "setupGuideLink": "如何设置服务器",
+      "addConnectionButton": "添加连接",
+      "tryDemoButton": "试用演示（无需服务器）",
+      "authFailedTitle": "身份验证失败",
+      "authFailedSubtitle": "{{name}} 拒绝了您的凭据。请检查用户名和密码后重新连接。",
+      "checkCredentialsButton": "检查凭据",
+      "noSessions": "暂无会话"
+    },
+    "newSessionModal": {
+      "title": "新建会话",
+      "currentProjectLabel": "当前项目",
+      "serverDefault": "服务器默认目录",
+      "agentLabel": "智能体",
+      "modelLabel": "模型",
+      "modelSearchPlaceholder": "搜索模型...",
+      "modelCount": "共 {{total}} 个，显示 {{shown}} 个",
+      "serverDefaultModel": "服务器默认（自动）",
+      "recentProjectsLabel": "最近项目",
+      "serverProjectsLabel": "服务器项目",
+      "browseFoldersLabel": "浏览文件夹…",
+      "browseFoldersHint": "浏览服务器的文件系统",
+      "enterPathLabel": "手动输入路径",
+      "createInButton": "在 {{dir}} 中创建",
+      "createSessionButton": "创建会话"
+    },
+    "renameModal": {
+      "title": "重命名会话"
+    }
+  },
+  "notifications": {
+    "categories": {
+      "permissions": {
+        "label": "权限请求",
+        "description": "当工具需要批准才能继续时"
+      },
+      "questions": {
+        "label": "问题",
+        "description": "当助手需要您的输入时"
+      },
+      "completed": {
+        "label": "任务完成",
+        "description": "当会话处理完成时"
+      },
+      "errors": {
+        "label": "错误",
+        "description": "当会话遇到问题时"
+      },
+      "connection": {
+        "label": "连接",
+        "description": "当应用长时间失去连接时"
+      }
+    }
+  },
+  "errorBoundary": {
+    "title": "出现了一些问题",
+    "subtitle": "应用遇到了一个意外错误，已自动上报。您可以分享详细报告以帮助我们更快修复。",
+    "errorLabel": "错误",
+    "unknownError": "未知错误",
+    "stackLabel": "堆栈",
+    "componentLabel": "组件",
+    "shareButton": "分享报告",
+    "tryAgainButton": "重试"
+  },
+  "telemetryConsent": {
+    "title": "帮助改进 OpenCode？",
+    "body": "分享匿名崩溃报告和使用分析，帮助我们更快地发现并修复问题。您分享的诊断报告也会发送至我们的支持收件箱。绝不包含代码、提示词或服务器地址。",
+    "bullets": {
+      "deviceInfo": "设备型号、系统版本、应用版本",
+      "stackTraces": "崩溃堆栈跟踪（不含变量值）",
+      "usageEvents": "匿名使用事件（打开应用、连接尝试、发送消息）— 发送至 PostHog EU",
+      "noCode": "您的代码、提示词或聊天消息",
+      "noServerUrls": "服务器地址或身份验证令牌"
+    },
+    "privacyLink": "阅读完整隐私政策",
+    "declineA11yLabel": "不用了，拒绝崩溃报告和使用分析",
+    "declineButton": "不用了",
+    "allowA11yLabel": "允许匿名崩溃报告和使用分析",
+    "allowButton": "允许",
+    "footnote": "您可以随时在设置 → 隐私中更改此设置。"
+  },
+  "authGate": {
+    "title": "OpenCode 已锁定",
+    "subtitle": "请验证身份以访问您的会话",
+    "unlockButton": "解锁"
+  },
+  "chat": {
+    "permissionPrompt": {
+      "title": "需要权限",
+      "deny": "拒绝",
+      "always": "始终允许",
+      "allow": "允许"
+    },
+    "questionPrompt": {
+      "headerFallback": "问题",
+      "answerPlaceholder": "输入您的答案...",
+      "customAnswerLabel": "输入自定义答案",
+      "dismiss": "忽略",
+      "next": "下一个",
+      "submit": "提交"
+    },
+    "statusIndicator": {
+      "retrying": "正在重试（第 {{attempt}} 次）...",
+      "working": "处理中..."
+    },
+    "slashPopover": {
+      "customBadge": "命令"
+    },
+    "modelPicker": {
+      "title": "选择模型",
+      "searchPlaceholder": "搜索模型..."
+    },
+    "agentPicker": {
+      "title": "选择智能体",
+      "searchPlaceholder": "搜索智能体..."
+    },
+    "variantPicker": {
+      "title": "推理强度",
+      "autoLabel": "自动",
+      "autoDescription": "使用模型默认推理强度",
+      "effort": {
+        "low": "速度更快，推理较简略",
+        "medium": "推理与速度均衡",
+        "high": "深入、详尽的推理"
+      }
+    },
+    "directorySwitcher": {
+      "title": "切换项目",
+      "serverDefaultLabel": "服务器默认",
+      "browseLabel": "浏览…",
+      "recentProjectsLabel": "最近项目",
+      "usesServerDir": "使用服务器的工作目录"
+    },
+    "directoryBrowserSheet": {
+      "noActiveConnection": "没有活动连接",
+      "listFailed": "无法列出目录",
+      "title": "浏览文件夹",
+      "jumpPlaceholder": "跳转到路径...",
+      "noSubfolders": "此处没有子文件夹",
+      "enterPathHint": "在上方输入路径以开始浏览",
+      "useFolderButton": "使用 {{folder}}",
+      "thisFolderFallback": "此文件夹"
+    },
+    "reasoningBlock": {
+      "label": "思考中"
+    },
+    "toolCallCard": {
+      "fallbackTitle": "工具",
+      "patternOnly": "模式：{{pattern}}",
+      "patternWithPath": "模式：{{pattern}}，路径：{{path}}"
+    },
+    "sessionInfo": {
+      "noUsageData": "暂无使用数据",
+      "loading": "加载中...",
+      "loadAllMessages": "加载全部消息",
+      "jumpToBeginning": "跳转到开头",
+      "pills": {
+        "in": "输入",
+        "out": "输出",
+        "think": "思考",
+        "cacheRead": "缓存读",
+        "cacheWrite": "缓存写"
+      },
+      "meta": {
+        "created": "创建于",
+        "updated": "更新于",
+        "messages": "消息数",
+        "changes": "变更",
+        "shared": "已分享",
+        "yes": "是"
+      },
+      "time": {
+        "justNow": "刚刚",
+        "minutesAgo": "{{count}} 分钟前",
+        "hoursAgo": "{{count}} 小时前",
+        "daysAgo": "{{count}} 天前"
+      }
+    }
+  },
+  "tailscaleImport": {
+    "subtitle": "粘贴 Tailscale API 密钥以列出您 tailnet 中的设备，然后选择哪些设备运行 opencode 服务器。",
+    "tokenLabel": "API 密钥",
+    "tokenPlaceholder": "tskey-api-…",
+    "rememberLabel": "在此设备上记住该密钥",
+    "rememberHint": "该密钥可管理您的整个 tailnet。关闭则每次都需要粘贴。",
+    "loadButton": "列出设备",
+    "loadingDevices": "正在加载设备…",
+    "enterToken": "请先粘贴 API 密钥。",
+    "errors": {
+      "unauthorized": "该密钥被拒绝（HTTP {{status}}）。请检查密钥后重试。",
+      "network": "无法连接到 Tailscale API。请检查网络连接后重试。",
+      "unexpected": "Tailscale API 返回了意外响应（HTTP {{status}}）。请稍后重试。",
+      "empty": "在此 tailnet 中未找到任何设备。"
+    },
+    "device": {
+      "offline": "离线？",
+      "lastSeenUnknown": "上次在线时间未知",
+      "alreadyAdded": "已添加"
+    },
+    "selectedCount": "已选 {{count}} 台",
+    "importButton": "导入 {{count}} 台",
+    "noSelection": "请先至少选择一台设备。",
+    "doneTitle": "导入完成",
+    "doneMessage": "已导入 {{imported}} 台，跳过 {{skipped}} 台已添加的。"
+  },
+  "qrScan": {
+    "title": "扫描二维码",
+    "subtitle": "将相机对准工作站上 oc-phone-qr 显示的二维码。",
+    "scanHint": "对准工作站上的二维码",
+    "openScannerButton": "扫描二维码",
+    "permissionDeniedTitle": "需要相机权限",
+    "permissionDeniedMessage": "OpenCode 需要相机权限才能扫描二维码，你也可以在下方粘贴链接。",
+    "openSettingsButton": "打开设置",
+    "retryButton": "重试",
+    "pasteLabel": "或粘贴链接",
+    "pastePlaceholder": "ocphone://connect?v=1&d=…",
+    "parseButton": "解析链接",
+    "clipboardButton": "从剪贴板粘贴",
+    "badCamera": "此设备上无法使用相机——请在下方粘贴链接。",
+    "previewTitle": "确认连接",
+    "nameLabel": "名称",
+    "serverUrlLabel": "服务器 URL",
+    "bridgeUrlLabel": "Bridge URL",
+    "projectDirLabel": "项目目录",
+    "usernameLabel": "用户名",
+    "secretsEmbedded": "二维码中包含凭据",
+    "secretsMissing": "二维码中没有凭据——请在下方输入",
+    "passwordLabel": "密码",
+    "bridgeTokenLabel": "Bridge token",
+    "passwordPlaceholder": "服务器密码",
+    "bridgeTokenPlaceholder": "Bridge token",
+    "saveButton": "保存连接",
+    "rescanButton": "重新扫描",
+    "testingMessage": "正在测试连接…",
+    "successTitle": "连接成功",
+    "successMessage": "{{name}} 可达。",
+    "errors": {
+      "empty": "请先粘贴 ocphone:// 链接。",
+      "malformed-uri": "链接无效——请重新扫描或粘贴完整的 ocphone:// 链接。",
+      "scheme": "链接类型错误——应为工作站二维码中的 ocphone:// 链接。",
+      "host": "链接目标错误——应为 ocphone://connect。",
+      "version": "不支持的链接版本——请更新应用并重新生成二维码。",
+      "missing-d": "链接中没有连接数据——请重新生成二维码。",
+      "bad-encoding": "链接数据已损坏——请重新扫描。",
+      "bad-json": "链接数据无效——请重新生成二维码。",
+      "payload-version": "不支持的连接版本——请更新应用并重新生成二维码。",
+      "missing-field": "二维码缺少“{{field}}”——请重新生成。",
+      "bad-field": "二维码字段“{{field}}”必须是文本——请重新生成。",
+      "bad-url": "URL 必须以 http:// 或 https:// 开头——请重新生成二维码。"
+    }
+  },
+  "demo": {
+    "title": "演示",
+    "banner": "演示 — 示例对话，未连接服务器",
+    "ctaTitle": "喜欢这个体验吗？",
+    "ctaSubtitle": "这是一个脚本化的演示。连接您自己的 opencode 服务器即可真正体验。",
+    "connectButton": "连接您自己的服务器",
+    "setupGuideLink": "如何设置服务器",
+    "hostedCtaLink": "没有服务器？加入 OpenCode Connect 候补名单 — 托管，无需搭建"
+  },
+  "update": {
+    "available": "有可用更新",
+    "body": "版本 {{version}} 已发布，你当前使用的是 {{current}}。",
+    "action": "去获取",
+    "dismiss": "暂不",
+    "upToDate": "已是最新"
+  },
+  "terminals": {
+    "tabs": {
+      "tmux": "tmux",
+      "serverPty": "服务器终端"
+    },
+    "tmux": {
+      "openTerminal": "打开终端",
+      "opening": "正在打开…",
+      "openFailedTitle": "无法打开终端"
+    },
+    "pty": {
+      "needsV2Title": "服务器终端需要 opencode v2",
+      "needsV2Body": "“{{name}}”使用 v1 API，不支持终端。请将服务器升级到 opencode v2 以使用服务器终端。",
+      "loadFailed": "无法加载服务器终端。",
+      "authHint": "服务器凭据被拒绝 — 请检查此连接的凭据。",
+      "empty": "暂无服务器终端。",
+      "newPty": "新建服务器终端",
+      "titleLabel": "标题（可选）",
+      "cwdLabel": "目录（可选）",
+      "commandLabel": "命令（可选）",
+      "createButton": "创建终端",
+      "killTitle": "终止终端？",
+      "killMessage": "“{{title}}”将被终止。",
+      "openHint": "点击打开"
+    }
+  },
+  "terminal": {
+    "title": "终端",
+    "tmuxTitle": "tmux：{{name}}",
+    "tmuxAttachedHint": "已连接到 tmux 会话“{{name}}”。分离后会话会继续运行。",
+    "detach": "分离",
+    "detached": "已分离 — tmux 会话“{{name}}”仍在运行。",
+    "loadFailed": "无法加载此终端。",
+    "connecting": "正在连接…",
+    "disconnected": "连接已断开",
+    "disconnectedBody": "终端数据流已中断。输出保留在服务器上。",
+    "exited": "终端已退出",
+    "exitedBody": "该 shell 已退出（代码 {{code}}）。请从终端列表创建新终端。",
+    "authFailed": "服务器凭据被拒绝 — 请检查此连接的凭据。",
+    "needsV2Title": "终端需要 opencode v2",
+    "needsV2Body": "“{{name}}”使用 v1 API，不支持终端。请将服务器升级到 opencode v2。",
+    "notFound": "该终端已不存在。",
+    "inputLabel": "终端输入",
+    "keys": {
+      "esc": "转义",
+      "tab": "制表符",
+      "ctrl": "控制键",
+      "left": "左箭头",
+      "up": "上箭头",
+      "down": "下箭头",
+      "right": "右箭头",
+      "int": "发送 Ctrl+C",
+      "keyboard": "显示键盘"
+    }
+  },
+  "browse": {
+    "title": "浏览文件",
+    "newSessionHere": "在此新建会话",
+    "emptyDir": "此文件夹为空",
+    "noStartDir": "无法确定起始目录",
+    "noStartDirHint": "请在下方输入绝对路径以开始浏览。",
+    "jumpPlaceholder": "输入绝对路径…",
+    "go": "前往",
+    "outsideRoot": "已超出浏览根目录 — 已停留在原处。",
+    "invalidPath": "请输入绝对路径，例如 /home/user/project。",
+    "fileNotFound": "文件不存在。",
+    "fileLoadFailed": "无法读取此文件。",
+    "authFailedMessage": "服务器凭据被拒绝 — 请检查此连接的凭据。",
+    "binaryNotice": "二进制文件 — 不显示预览。",
+    "truncatedNotice": "仅显示前 {{shown}} 个字符（共 {{total}} 个）。",
+    "backToFiles": "返回文件列表",
+    "composerTitle": "在“{{dir}}”中新建会话",
+    "promptPlaceholder": "输入第一条消息…",
+    "createAndSend": "创建并发送",
+    "creating": "正在创建…",
+    "createFailedTitle": "创建会话失败",
+    "createFailedMessage": "{{detail}}"
+  }
+}

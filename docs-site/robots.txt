@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dzianisv.github.io/opencode-mobile/sitemap.xml

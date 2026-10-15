@@ -1,0 +1,692 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "ok": "OK",
+    "error": "Error",
+    "delete": "Delete",
+    "retry": "Retry",
+    "save": "Save",
+    "close": "Close",
+    "shareReport": "Share report"
+  },
+  "settings": {
+    "sections": {
+      "security": "Security",
+      "appearance": "Appearance",
+      "notifications": "Notifications",
+      "ntfy": "ntfy (needs a self-hosted ntfy server)",
+      "privacy": "Privacy",
+      "about": "About",
+      "inapp": "In-app / background (no extra service)"
+    },
+    "appearance": {
+      "matchServerTheme": {
+        "label": "Match server theme",
+        "descriptionOn": "Using the \"{{name}}\" theme from the active server",
+        "descriptionOff": "Using the device light/dark appearance instead"
+      }
+    },
+    "security": {
+      "biometricOpen": {
+        "label": "Require Biometric to Open",
+        "descriptionEnabled": "Use Face ID or Touch ID to unlock the app",
+        "descriptionUnavailable": "Biometric authentication not available"
+      },
+      "biometricSend": {
+        "label": "Require Biometric to Send",
+        "description": "Authenticate before sending messages"
+      },
+      "lockNow": {
+        "label": "Lock App Now",
+        "description": "Require authentication to reopen"
+      }
+    },
+    "notifications": {
+      "disabledNotice": "Notifications are disabled at the system level. Enable them in Settings to receive alerts."
+    },
+    "ntfy": {
+      "enabled": {
+        "label": "Agent alerts via ntfy",
+        "description": "Poll your self-hosted ntfy topic for permission, idle and error alerts"
+      },
+      "baseUrl": {
+        "label": "ntfy server URL",
+        "description": "Base URL of your self-hosted ntfy server on the Tailnet"
+      },
+      "topic": {
+        "label": "Topic",
+        "description": "Must match NTFY_TOPIC on the agent side"
+      },
+      "testButton": "Send test notification",
+      "testing": "Publishing and listening…",
+      "statusListening": "Listening for agent alerts",
+      "statusOff": "Off — enable to receive agent alerts",
+      "lastReceived": "Last received: {{title}}",
+      "lastError": "Last error: {{detail}}",
+      "foregroundNote": "Delivers while the app is running. It cannot wake a killed app — no FCM or foreground service is configured.",
+      "alerts": {
+        "testOkTitle": "Test notification received",
+        "testOkMessage": "Round trip confirmed: {{detail}}.",
+        "testFailedTitle": "Test failed",
+        "enableFirstTitle": "Listener is off",
+        "enableFirstMessage": "Enable agent alerts first, then send a test."
+      }
+    },
+    "privacy": {
+      "crashReporting": {
+        "label": "Crash Reports & Usage Analytics",
+        "description": "Share anonymous crash reports (Sentry) and usage analytics (PostHog) to help improve OpenCode. Diagnostic reports you share are also delivered to our support inbox. No code or prompts are included."
+      },
+      "privacyPolicy": {
+        "label": "Privacy Policy",
+        "description": "What data we collect and how"
+      }
+    },
+    "about": {
+      "version": "Version",
+      "github": {
+        "label": "GitHub",
+        "description": "View source code"
+      },
+      "docs": {
+        "label": "Documentation",
+        "description": "Learn how to use OpenCode"
+      }
+    },
+    "language": {
+      "label": "Language",
+      "title": "Choose Language",
+      "system": "System Default",
+      "en": "English",
+      "zhHans": "Simplified Chinese"
+    },
+    "footer": {
+      "appName": "OpenCode Mobile",
+      "tagline": "Connect to your AI coding assistant from anywhere"
+    },
+    "alerts": {
+      "privacyNotSavedTitle": "Privacy Setting Not Saved",
+      "privacyNotSavedMessage": "Crash reporting is off for this session, but your choice could not be saved. Please try again.",
+      "notificationsDisabledTitle": "Notifications Disabled",
+      "notificationsDisabledMessage": "Enable notifications for OpenCode in your device settings to receive alerts."
+    },
+    "inapp": {
+      "poll": {
+        "label": "Background checks",
+        "description": "Re-check watched sessions about every 15 minutes while backgrounded (throttled by the OS; can run late under battery saver)"
+      },
+      "foreground": {
+        "label": "Persistent watcher (Android)",
+        "description": "Keep a foreground service polling every 60 seconds for timely alerts. Shows a permanent notification and uses more battery."
+      },
+      "limits": "Background checks cannot reliably wake a killed app — reopen the app after Force stop. Only the persistent watcher delivers after the app is swiped away, and nothing resumes after a reboot until the app is opened again."
+    }
+  },
+  "session": {
+    "titleFallback": "Session",
+    "toolbar": {
+      "auto": "Auto"
+    },
+    "banners": {
+      "reconnecting": "Reconnecting… (attempt {{attempt}})",
+      "connected": "Connected ✓",
+      "reverted": "Message reverted — resend to confirm",
+      "undo": "Undo",
+      "dismiss": "Dismiss"
+    },
+    "sheet": {
+      "thinking": "Thinking",
+      "tool": "Tool",
+      "input": "Input",
+      "result": "Result",
+      "error": "Error",
+      "file": "File"
+    },
+    "empty": {
+      "title": "Start a conversation",
+      "hint": "Type / for commands"
+    },
+    "loadingOlder": "Loading older messages...",
+    "input": {
+      "placeholderListening": "Listening...",
+      "placeholderFollowUp": "Send a follow-up...",
+      "placeholderDefault": "Type a message..."
+    },
+    "actions": {
+      "editMessage": "Edit message",
+      "replace": "Replace",
+      "selectText": "Select text",
+      "copyAll": "Copy all",
+      "copied": "Copied"
+    },
+    "alerts": {
+      "messageActionsTitle": "Message actions",
+      "notSupportedTitle": "Not supported",
+      "notSupportedMessage": "Editing sent messages needs a newer opencode server. Please update the server and try again.",
+      "revertAuthFailedTitle": "Authentication failed",
+      "revertAuthFailedMessage": "Your server credentials were rejected. Check your connection and try again.",
+      "editFailedTitle": "Edit failed",
+      "editFailedMessage": "Could not revert to this message. Please try again.",
+      "replaceDraftTitle": "Replace draft?",
+      "replaceDraftMessage": "You have an unsent message in the composer. Editing this message will replace it.",
+      "cameraPermissionTitle": "Permission needed",
+      "cameraPermissionMessage": "Camera access is required to take photos.",
+      "emptyClipboardTitle": "Empty clipboard",
+      "emptyClipboardMessage": "Clipboard does not contain text or an image.",
+      "authRequiredTitle": "Authentication required",
+      "authRequiredMessage": "Biometric authentication is required to send. Please try again.",
+      "sendFailedTitle": "Message not sent",
+      "sendFailedMessage": "Could not send your message. Check your connection and try again.",
+      "replyFailedTitle": "Reply Failed",
+      "replyFailedMessage": "Could not send your response. Please try again.",
+      "rejectFailedTitle": "Reject Failed",
+      "rejectFailedMessage": "Could not send your response. Please try again.",
+      "imageFailedTitle": "Image not attached",
+      "imageFailedMessage": "One or more images could not be processed. Please try a different photo.",
+      "speechErrorTitle": "Voice input failed",
+      "speechErrorMessage": "Could not use voice input. Check your microphone permission and try again.",
+      "switchFailedTitle": "Switch failed",
+      "switchFailedMessage": "The server did not confirm the switch. Check your connection and try again."
+    }
+  },
+  "connection": {
+    "shared": {
+      "connectionType": "Connection Type",
+      "types": {
+        "local": "Local",
+        "tunnel": "Tunnel",
+        "cloud": "Cloud"
+      },
+      "name": "Name",
+      "namePlaceholder": "My Server",
+      "serverUrl": "Server URL",
+      "directoryOptional": "Project Directory (Optional)",
+      "authentication": "Authentication",
+      "username": "Username",
+      "password": "Password",
+      "alerts": {
+        "enterName": "Please enter a connection name",
+        "enterUrl": "Please enter a server URL",
+        "invalidUrlTitle": "Invalid URL",
+        "invalidUrlMessage": "Enter a server address — 192.168.1.100, my-mac.tailnet.ts.net, or a full URL like http://192.168.1.100:4096",
+        "connectionFailedTitle": "Connection Failed",
+        "unknownError": "Unknown error",
+        "saveFailedTitle": "Couldn't Save Connection",
+        "saveFailedMessage": "The connection test succeeded, but saving it failed. Please try again."
+      }
+    },
+    "add": {
+      "quick": {
+        "title": "Connect to OpenCode",
+        "subtitle": "Enter your computer's IP address to connect",
+        "ipAddressLabel": "IP Address or Hostname",
+        "nameOptionalLabel": "Name (optional)",
+        "namePlaceholder": "My Mac",
+        "passwordIfSetLabel": "Password (if set on server)",
+        "passwordPlaceholder": "Leave empty if none",
+        "usernameHintPrefix": "Username defaults to ",
+        "usernameHintMiddle": ". Custom username? Use ",
+        "usernameHintSuffix": ".",
+        "advancedOptionsLink": "Advanced options",
+        "connectButton": "Connect",
+        "helpTitle": "How to find your IP:",
+        "helpMacPrefix": "On your Mac, run:",
+        "helpTailscalePrefix": "Tailscale examples:",
+        "helpProtocolPrefix": "Use ",
+        "helpProtocolMiddle": " for local and Tailscale addresses unless TLS is configured, then use ",
+        "helpProtocolSuffix": ".",
+        "helpRunningPrefix": "Make sure OpenCode is running:",
+        "connectCardTitle": "OpenCode Connect",
+        "connectCardBadge": "Coming Soon",
+        "connectCardDesc": "Bridge your phone to your opencode server — no tunnel setup, no firewall config. One-tap connect from anywhere.",
+        "advancedLink": "Advanced options (tunnels, cloud, auth)"
+      },
+      "waitlist": {
+        "successText": "You're on the list — we'll email you when OpenCode Connect is ready.",
+        "joinButton": "Join Waitlist",
+        "alertTitle": "Join Waitlist",
+        "queuedText": "Saved on this device — we'll finish signing you up as soon as you're back online. You don't have to do anything.",
+        "emailUsLink": "Still not working? Email us instead",
+        "emailUsButton": "Email us",
+        "queueFailedMessage": "We couldn't reach the signup service or save your request on this device. You can email us instead and we'll add you by hand.",
+        "noMailAppMessage": "No email app is available. Please email support@agentlabs.cc with subject \"OpenCode Connect Waitlist\"."
+      },
+      "advanced": {
+        "backToQuick": "Simple mode",
+        "urlHintPrefix": "Local/Tailscale examples: ",
+        "urlHintOr": " or ",
+        "urlHintUse": ". Use ",
+        "urlHintSuffix": " only when TLS is configured.",
+        "directoryHint": "Leave empty to use the server's current directory, or specify a path to work in a different folder.",
+        "saveButton": "Save Connection"
+      },
+      "alerts": {
+        "enterIp": "Please enter your computer's IP address",
+        "connectionFailedMessage": "{{summary}}\n\nTarget: {{target}}\nError: {{error}}"
+      }
+    },
+    "edit": {
+      "notFound": "Connection not found",
+      "directoryHint": "Leave empty to use the server's current directory. Sessions will be created in this folder.",
+      "passwordLabel": "Password (leave empty to keep existing)",
+      "testButton": "Test Connection",
+      "saveButton": "Save Changes",
+      "deleteButton": "Delete Connection",
+      "browseFiles": "Browse files",
+      "browseHint": "Browse this server's files, starting at the default project dir.",
+      "defaultProjectDir": "Default project dir (optional)",
+      "alerts": {
+        "successTitle": "Success",
+        "successMessage": "Connection successful!",
+        "connectionFailedMessage": "{{summary}}\n\n({{detail}})",
+        "noDetail": "no detail",
+        "deleteTitle": "Delete Connection",
+        "deleteMessage": "Are you sure you want to delete \"{{name}}\"?"
+      }
+    }
+  },
+  "nav": {
+    "sessionsTab": "Sessions",
+    "connectionsTab": "Connections",
+    "settingsTab": "Settings",
+    "addConnectionTitle": "Add Connection",
+    "editConnectionTitle": "Edit Connection",
+    "tailscaleImportTitle": "Import from Tailscale",
+    "qrScanTitle": "Scan QR Code"
+  },
+  "connectionsList": {
+    "activeBadge": "Active",
+    "lastConnected": "Last connected: {{date}}",
+    "importButton": "Import from Tailscale",
+    "status": {
+      "reachable": "Reachable",
+      "authRequired": "Needs login",
+      "unreachable": "Unreachable",
+      "checking": "Checking…",
+      "unknown": "Not checked"
+    },
+    "actionsAlert": {
+      "message": "What would you like to do?",
+      "browse": "Browse files",
+      "edit": "Edit"
+    },
+    "empty": {
+      "title": "No Connections",
+      "subtitle": "Add a connection to your OpenCode server"
+    },
+    "header": "Tap to switch, long press for options",
+    "preferences": {
+      "title": "Preferences",
+      "pageSizeLabel": "Messages per page",
+      "pageSizeHint": "How many messages to load when opening a session. Lower = faster."
+    }
+  },
+  "sessionsList": {
+    "untitledSession": "Untitled Session",
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    },
+    "filesCount": "{{count}} files",
+    "actions": {
+      "rename": "Rename"
+    },
+    "alerts": {
+      "renameFailedTitle": "Rename failed",
+      "renameFailedMessage": "Could not rename the session. Please try again.",
+      "deleteTitle": "Delete Session",
+      "deleteMessage": "Delete \"{{title}}\"?",
+      "deleteFailedTitle": "Delete failed",
+      "deleteFailedMessage": "Could not delete the session. Please try again.",
+      "createFailedMessage": "Failed to create session. Check your connection and try again."
+    },
+    "empty": {
+      "noConnectionTitle": "No Connection",
+      "noConnectionSubtitle": "Connect to a computer running opencode serve on your network or via Tailscale to get started.",
+      "setupGuideLink": "How to set up a server",
+      "addConnectionButton": "Add Connection",
+      "tryDemoButton": "Try a demo (no server needed)",
+      "authFailedTitle": "Authentication Failed",
+      "authFailedSubtitle": "{{name}} rejected your credentials. Check the username and password to reconnect.",
+      "checkCredentialsButton": "Check Credentials",
+      "noSessions": "No sessions yet"
+    },
+    "newSessionModal": {
+      "title": "New Session",
+      "currentProjectLabel": "Current Project",
+      "serverDefault": "Server default",
+      "agentLabel": "Agent",
+      "modelLabel": "Model",
+      "modelSearchPlaceholder": "Search models...",
+      "modelCount": "{{shown}} of {{total}}",
+      "serverDefaultModel": "Server default (automatic)",
+      "recentProjectsLabel": "Recent Projects",
+      "serverProjectsLabel": "Server Projects",
+      "browseFoldersLabel": "Browse Folders…",
+      "browseFoldersHint": "Explore the server's filesystem",
+      "enterPathLabel": "Enter Path Manually",
+      "createInButton": "Create in {{dir}}",
+      "createSessionButton": "Create Session"
+    },
+    "renameModal": {
+      "title": "Rename Session"
+    }
+  },
+  "notifications": {
+    "categories": {
+      "permissions": {
+        "label": "Permission Requests",
+        "description": "When a tool needs approval to proceed"
+      },
+      "questions": {
+        "label": "Questions",
+        "description": "When the assistant needs your input"
+      },
+      "completed": {
+        "label": "Task Completed",
+        "description": "When a session finishes processing"
+      },
+      "errors": {
+        "label": "Errors",
+        "description": "When a session encounters a problem"
+      },
+      "connection": {
+        "label": "Connection",
+        "description": "When the app loses connection for an extended period"
+      }
+    }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "subtitle": "The app hit an unexpected error. It has been reported automatically. You can share a detailed report to help us fix it faster.",
+    "errorLabel": "Error",
+    "unknownError": "Unknown error",
+    "stackLabel": "Stack",
+    "componentLabel": "Component",
+    "shareButton": "Share Report",
+    "tryAgainButton": "Try Again"
+  },
+  "telemetryConsent": {
+    "title": "Help improve OpenCode?",
+    "body": "Share anonymous crash reports and usage analytics to help us find and fix bugs faster. Diagnostic reports you share are also delivered to our support inbox. No code, prompts, or server addresses are ever included.",
+    "bullets": {
+      "deviceInfo": "Device model, OS version, app version",
+      "stackTraces": "Stack traces of crashes (no variable values)",
+      "usageEvents": "Anonymous usage events (app opened, connection attempts, messages sent) — sent to PostHog EU",
+      "noCode": "Your code, prompts, or chat messages",
+      "noServerUrls": "Server URLs or authentication tokens"
+    },
+    "privacyLink": "Read our full privacy policy",
+    "declineA11yLabel": "No thanks, decline crash reporting and analytics",
+    "declineButton": "No thanks",
+    "allowA11yLabel": "Allow anonymous crash reports and usage analytics",
+    "allowButton": "Allow",
+    "footnote": "You can change this at any time in Settings → Privacy."
+  },
+  "authGate": {
+    "title": "OpenCode Locked",
+    "subtitle": "Authenticate to access your sessions",
+    "unlockButton": "Unlock"
+  },
+  "chat": {
+    "permissionPrompt": {
+      "title": "Permission Required",
+      "deny": "Deny",
+      "always": "Always",
+      "allow": "Allow"
+    },
+    "questionPrompt": {
+      "headerFallback": "Question",
+      "answerPlaceholder": "Type your answer...",
+      "customAnswerLabel": "Type your own answer",
+      "dismiss": "Dismiss",
+      "next": "Next",
+      "submit": "Submit"
+    },
+    "statusIndicator": {
+      "retrying": "Retrying (attempt {{attempt}})...",
+      "working": "Working..."
+    },
+    "slashPopover": {
+      "customBadge": "cmd"
+    },
+    "modelPicker": {
+      "title": "Select Model",
+      "searchPlaceholder": "Search models..."
+    },
+    "agentPicker": {
+      "title": "Select Agent",
+      "searchPlaceholder": "Search agents..."
+    },
+    "variantPicker": {
+      "title": "Reasoning Effort",
+      "autoLabel": "Auto",
+      "autoDescription": "Use model default reasoning",
+      "effort": {
+        "low": "Faster, less thorough reasoning",
+        "medium": "Balanced reasoning and speed",
+        "high": "Deep, thorough reasoning"
+      }
+    },
+    "directorySwitcher": {
+      "title": "Switch Project",
+      "serverDefaultLabel": "Server Default",
+      "browseLabel": "Browse…",
+      "recentProjectsLabel": "Recent Projects",
+      "usesServerDir": "Uses server's working directory"
+    },
+    "directoryBrowserSheet": {
+      "noActiveConnection": "No active connection",
+      "listFailed": "Failed to list directory",
+      "title": "Browse Folders",
+      "jumpPlaceholder": "Jump to path...",
+      "noSubfolders": "No subfolders here",
+      "enterPathHint": "Enter a path above to start browsing",
+      "useFolderButton": "Use {{folder}}",
+      "thisFolderFallback": "this folder"
+    },
+    "reasoningBlock": {
+      "label": "Thinking"
+    },
+    "toolCallCard": {
+      "fallbackTitle": "Tool",
+      "patternOnly": "Pattern: {{pattern}}",
+      "patternWithPath": "Pattern: {{pattern}} in {{path}}"
+    },
+    "sessionInfo": {
+      "noUsageData": "No usage data yet",
+      "loading": "Loading...",
+      "loadAllMessages": "Load all messages",
+      "jumpToBeginning": "Jump to beginning",
+      "pills": {
+        "in": "In",
+        "out": "Out",
+        "think": "Think",
+        "cacheRead": "Cache R",
+        "cacheWrite": "Cache W"
+      },
+      "meta": {
+        "created": "Created",
+        "updated": "Updated",
+        "messages": "Messages",
+        "changes": "Changes",
+        "shared": "Shared",
+        "yes": "Yes"
+      },
+      "time": {
+        "justNow": "just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "daysAgo": "{{count}}d ago"
+      }
+    }
+  },
+  "tailscaleImport": {
+    "subtitle": "Paste a Tailscale API key to list the devices on your tailnet, then pick which ones run an opencode server.",
+    "tokenLabel": "API key",
+    "tokenPlaceholder": "tskey-api-…",
+    "rememberLabel": "Remember this key on this device",
+    "rememberHint": "This key can manage your whole tailnet. Leave it off and you'll paste it each time.",
+    "loadButton": "List devices",
+    "loadingDevices": "Loading devices…",
+    "enterToken": "Paste an API key first.",
+    "errors": {
+      "unauthorized": "That key was rejected (HTTP {{status}}). Check the key and try again.",
+      "network": "Could not reach the Tailscale API. Check your internet connection and try again.",
+      "unexpected": "The Tailscale API returned an unexpected response (HTTP {{status}}). Try again later.",
+      "empty": "No devices found on this tailnet."
+    },
+    "device": {
+      "offline": "Offline?",
+      "lastSeenUnknown": "Last seen unknown",
+      "alreadyAdded": "Already added"
+    },
+    "selectedCount": "{{count}} selected",
+    "importButton": "Import {{count}}",
+    "noSelection": "Select at least one device first.",
+    "doneTitle": "Import complete",
+    "doneMessage": "Imported {{imported}}. Skipped {{skipped}} already-added."
+  },
+  "qrScan": {
+    "title": "Scan QR Code",
+    "subtitle": "Point your camera at the QR shown by oc-phone-qr on your workstation.",
+    "scanHint": "Point at the workstation QR",
+    "openScannerButton": "Scan QR Code",
+    "permissionDeniedTitle": "Camera access needed",
+    "permissionDeniedMessage": "OpenCode needs camera access to scan the QR. You can also paste the link below instead.",
+    "openSettingsButton": "Open Settings",
+    "retryButton": "Try Again",
+    "pasteLabel": "Or paste the link",
+    "pastePlaceholder": "ocphone://connect?v=1&d=…",
+    "parseButton": "Parse Link",
+    "clipboardButton": "Paste from Clipboard",
+    "badCamera": "Camera unavailable on this device — paste the link below instead.",
+    "previewTitle": "Confirm connection",
+    "nameLabel": "Name",
+    "serverUrlLabel": "Server URL",
+    "bridgeUrlLabel": "Bridge URL",
+    "projectDirLabel": "Project directory",
+    "usernameLabel": "Username",
+    "secretsEmbedded": "Credentials included in QR",
+    "secretsMissing": "Credentials NOT in QR — enter them below",
+    "passwordLabel": "Password",
+    "bridgeTokenLabel": "Bridge token",
+    "passwordPlaceholder": "Server password",
+    "bridgeTokenPlaceholder": "Bridge token",
+    "saveButton": "Save Connection",
+    "rescanButton": "Scan Again",
+    "testingMessage": "Testing connection…",
+    "successTitle": "Connected",
+    "successMessage": "{{name}} is reachable.",
+    "errors": {
+      "empty": "Paste an ocphone:// link first.",
+      "malformed-uri": "That is not a valid link — scan the QR again or paste the full ocphone:// link.",
+      "scheme": "Wrong link type — expected the ocphone:// link from the workstation QR.",
+      "host": "Wrong link target — expected ocphone://connect.",
+      "version": "Unsupported link version — update this app and regenerate the QR.",
+      "missing-d": "This link carries no connection data — regenerate the QR.",
+      "bad-encoding": "The link data is corrupted — scan again.",
+      "bad-json": "The link data is not valid — regenerate the QR.",
+      "payload-version": "Unsupported connection version — update this app and regenerate the QR.",
+      "missing-field": "The QR is missing \"{{field}}\" — regenerate it.",
+      "bad-field": "The QR field \"{{field}}\" must be text — regenerate it.",
+      "bad-url": "The URL must start with http:// or https:// — regenerate the QR."
+    }
+  },
+  "demo": {
+    "title": "Demo",
+    "banner": "Demo — sample conversation, no server connected",
+    "ctaTitle": "Like what you see?",
+    "ctaSubtitle": "This was a scripted demo. Connect your own opencode server to do this for real.",
+    "connectButton": "Connect your own server",
+    "setupGuideLink": "How to set up a server",
+    "hostedCtaLink": "No server? Join the OpenCode Connect waitlist — hosted, no setup"
+  },
+  "update": {
+    "available": "Update available",
+    "body": "Version {{version}} is out. You're on {{current}}.",
+    "action": "Get it",
+    "dismiss": "Not now",
+    "upToDate": "Up to date"
+  },
+  "terminals": {
+    "tabs": {
+      "tmux": "tmux",
+      "serverPty": "Server PTYs"
+    },
+    "tmux": {
+      "openTerminal": "Open terminal",
+      "opening": "Opening…",
+      "openFailedTitle": "Could not open terminal"
+    },
+    "pty": {
+      "needsV2Title": "Server PTYs need opencode v2",
+      "needsV2Body": "\"{{name}}\" speaks the v1 API, which has no terminal support. Update the server to opencode v2 to use server terminals.",
+      "loadFailed": "Could not load server terminals.",
+      "authHint": "Server credentials rejected — check them on this connection.",
+      "empty": "No server terminals.",
+      "newPty": "New server terminal",
+      "titleLabel": "Title (optional)",
+      "cwdLabel": "Directory (optional)",
+      "commandLabel": "Command (optional)",
+      "createButton": "Create terminal",
+      "killTitle": "Kill terminal?",
+      "killMessage": "\"{{title}}\" will be terminated.",
+      "openHint": "Tap to open"
+    }
+  },
+  "terminal": {
+    "title": "Terminal",
+    "tmuxTitle": "tmux: {{name}}",
+    "tmuxAttachedHint": "Attached to tmux session \"{{name}}\". Detaching leaves the session running.",
+    "detach": "Detach",
+    "detached": "Detached — tmux session \"{{name}}\" is still running.",
+    "loadFailed": "Could not load this terminal.",
+    "connecting": "Connecting…",
+    "disconnected": "Connection lost",
+    "disconnectedBody": "The terminal stream dropped. Output is preserved on the server.",
+    "exited": "Terminal exited",
+    "exitedBody": "This shell has exited (code {{code}}). Create a new terminal from the Terminals tab.",
+    "authFailed": "Server credentials rejected — check them on this connection.",
+    "needsV2Title": "Terminals need opencode v2",
+    "needsV2Body": "\"{{name}}\" speaks the v1 API, which has no terminal support. Update the server to opencode v2.",
+    "notFound": "This terminal no longer exists.",
+    "inputLabel": "Terminal input",
+    "keys": {
+      "esc": "Escape",
+      "tab": "Tab",
+      "ctrl": "Control modifier",
+      "left": "Left arrow",
+      "up": "Up arrow",
+      "down": "Down arrow",
+      "right": "Right arrow",
+      "int": "Send Ctrl+C",
+      "keyboard": "Show keyboard"
+    }
+  },
+  "browse": {
+    "title": "Browse files",
+    "newSessionHere": "New session here",
+    "emptyDir": "This folder is empty",
+    "noStartDir": "Could not determine a start directory",
+    "noStartDirHint": "Enter an absolute path below to start browsing.",
+    "jumpPlaceholder": "Enter an absolute path…",
+    "go": "Go",
+    "outsideRoot": "Outside the browse root — staying put.",
+    "invalidPath": "Enter an absolute path, e.g. /home/user/project.",
+    "fileNotFound": "File not found.",
+    "fileLoadFailed": "Could not read this file.",
+    "authFailedMessage": "Server credentials rejected — check them on this connection.",
+    "binaryNotice": "Binary file — preview not shown.",
+    "truncatedNotice": "Showing the first {{shown}} of {{total}} characters.",
+    "backToFiles": "Back to files",
+    "composerTitle": "New session in {{dir}}",
+    "promptPlaceholder": "Type the first message…",
+    "createAndSend": "Create & send",
+    "creating": "Creating…",
+    "createFailedTitle": "Could not create session",
+    "createFailedMessage": "{{detail}}"
+  }
+}

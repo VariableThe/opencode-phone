@@ -1,0 +1,15 @@
+v0.4.7 — Connection status banner + privacy test coverage
+
+• Reconnecting banner: when the connection to your opencode server drops,
+  an amber "Reconnecting… (attempt N)" banner appears in the session view.
+  A green "Connected ✓" flash confirms when the connection recovers.
+
+• Push notifications: permission requests and agent questions now fire an
+  OS push notification when the app is backgrounded — title "Agent needs
+  approval" with dedup so reconnects don't re-fire the same notification.
+
+• Privacy: URL credential scrubbing (basic-auth, token, api_key, password)
+  now has 13 automated unit tests. Any regression will fail CI before shipping.
+
+• Internal: pure scrub module extracted for testability; goal.md and TDD
+  docs updated to reflect current shipped state.

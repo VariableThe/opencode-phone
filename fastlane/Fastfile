@@ -1,0 +1,21 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build and publish to Google Play internal track"
+  lane :deploy do
+    gradle(
+      project_dir: "../android",
+      task: "bundle",
+      build_type: "Release"
+    )
+    upload_to_play_store(
+      package_name: "cc.agentlabs.opencode",
+      track: "internal",
+      aab: "../android/app/build/outputs/bundle/release/app-release.aab",
+      json_key: ENV["SUPPLY_JSON_KEY"] || "play-store-key.json",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end

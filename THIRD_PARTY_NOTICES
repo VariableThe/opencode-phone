@@ -1,0 +1,28 @@
+# Third-party notices
+
+## alvarolorentedev/opencode-mobile (Apache-2.0)
+
+- Project: https://github.com/alvarolorentedev/opencode-mobile
+- Commit reviewed: cd869f9c75d8833a6fd644ba71753e2d4e1b7af9 (main, 2026-10-14)
+- License: Apache License 2.0 (see the project's LICENSE file)
+
+What was adopted: the notification DESIGN only — a settlement-gated "should
+notify" evaluator (running / retrying / blocked / failed / aborted / finished;
+finished + failed + needs-input notify, aborted dropped), a persisted pending
+record keyed per connection + session, completion copy that distinguishes
+finished from failed, a non-secret tap-routing payload (session + connection
+scope), and periodic background re-checks plus an Android foreground service
+for delivery while the app is closed. No code was copied verbatim and no
+branding, names, or assets were reused; every file below is an original
+implementation written against this repo's own server API and conventions.
+
+Files implementing the adopted design:
+
+- src/lib/session-settlement.ts (+ .test.ts) — settlement classification,
+  should-notify rules, shared alert-key scheme and dedupe
+- src/stores/session-watch.ts — watch list, periodic/background evaluation
+- src/lib/background-poll.ts — expo-background-fetch periodic task
+- android/.../SessionMonitorService.kt, SessionMonitorModule.kt,
+  SessionMonitorPackage.kt — Android foreground dataSync service + bridge
+- src/lib/foreground-service.ts — JS bridge for the service
+- src/lib/notifications.ts, app/_layout.tsx — connection-scoped tap routing

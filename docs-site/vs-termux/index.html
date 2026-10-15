@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenCode Mobile vs Termux: AI Coding on Android Without the Setup Headaches</title>
+<meta name="description" content="Skip the Termux SSH tunnel, key management, and dotfile rabbit hole. OpenCode Mobile gives you a native Android UI to your opencode server — one scan or URL and you're coding with AI." />
+<meta name="keywords" content="opencode android termux alternative, AI coding on Android without Termux, run AI agent on Android, termux opencode setup, android ai coding native app, termux vs native app ai coding, opencode mobile termux" />
+<meta name="theme-color" content="#3b82f6" />
+<link rel="canonical" href="https://dzianisv.github.io/opencode-mobile/vs-termux/" />
+<link rel="icon" type="image/png" href="../fdroid/repo/icons/icon.png" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="OpenCode Mobile" />
+<meta property="og:title" content="OpenCode Mobile vs Termux: AI Coding on Android Without the Setup Headaches" />
+<meta property="og:description" content="Skip the Termux SSH tunnel, key management, and dotfile rabbit hole. OpenCode Mobile gives you a native Android UI to your opencode server — one scan or URL and you're coding with AI." />
+<meta property="og:url" content="https://dzianisv.github.io/opencode-mobile/vs-termux/" />
+<meta property="og:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="OpenCode Mobile vs Termux: AI Coding on Android Without the Setup Headaches" />
+<meta name="twitter:description" content="Skip the Termux SSH tunnel, key management, and dotfile rabbit hole. OpenCode Mobile gives you a native Android UI to your opencode server." />
+<meta name="twitter:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Structured data: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "OpenCode Mobile", "item": "https://dzianisv.github.io/opencode-mobile/" },
+    { "@type": "ListItem", "position": 2, "name": "vs Termux", "item": "https://dzianisv.github.io/opencode-mobile/vs-termux/" }
+  ]
+}
+</script>
+
+<!-- Structured data: Article -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "OpenCode Mobile vs Termux: AI Coding on Android Without the Setup Headaches",
+  "description": "A detailed comparison of running the opencode AI coding agent on Android via Termux vs the OpenCode Mobile native Android client.",
+  "url": "https://dzianisv.github.io/opencode-mobile/vs-termux/",
+  "datePublished": "2026-06-05",
+  "dateModified": "2026-06-05",
+  "author": { "@type": "Organization", "name": "VIBE TECHNOLOGIES, LLC" },
+  "publisher": { "@type": "Organization", "name": "OpenCode Mobile" }
+}
+</script>
+
+<!-- Structured data: FAQPage -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Can I run opencode on Android without Termux?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. OpenCode Mobile is a native Android client that connects to an opencode server running on your laptop, desktop, or VPS. You don't need Termux, SSH keys, or any terminal emulation on the phone itself — just the app and a URL."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the difference between using Termux and OpenCode Mobile?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "With Termux you install Node.js, set up SSH tunneling, manage API keys inside the emulated shell, and use a small-screen terminal as your UI. With OpenCode Mobile you install the app, enter your server URL (or scan a QR code), and get a full native Android interface — streaming chat, diff viewer, tool call approval — with credentials stored in the Android Keystore."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does OpenCode Mobile work offline or only over the internet?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "OpenCode Mobile connects to your own opencode server — it does not call any external service by itself. If your server is on the same LAN as your phone, or reachable via Tailscale, everything works with no internet. If your server uses a local LLM (e.g. Ollama), the full pipeline is air-gapped."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is OpenCode Mobile safe to use with proprietary code?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The app never proxies your code or conversations through any third-party server. Traffic goes from your phone directly to your own opencode server over your private network or a Tailscale tunnel. Your API keys live on the server, not the phone."
+      }
+    }
+  ]
+}
+</script>
+
+<style>
+:root{--bg:#0b0f17;--bg-soft:#121826;--card:#161d2e;--border:#243049;--text:#e6ebf5;--muted:#9aa6be;--accent:#3b82f6;--accent-2:#2563eb;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+section{padding:36px 0;border-top:1px solid var(--border)}
+section:first-of-type{border-top:none}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h1{font-size:2.1rem}
+h2{font-size:1.4rem;margin-top:.2em}
+h3{font-size:1.1rem;margin-top:1.4em}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg-soft);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:.9em;word-break:break-all;}
+pre{background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;}
+pre code{background:none;border:none;padding:0;word-break:normal}
+.crumbs{font-size:.9rem;color:var(--muted);padding-top:24px}
+.crumbs a{color:var(--muted)}
+.crumbs a:hover{color:var(--accent)}
+.lead{font-size:1.12rem;color:var(--muted)}
+.muted{color:var(--muted)}
+ul li,ol li{margin-bottom:6px}
+
+/* Comparison table */
+.table-wrap{overflow-x:auto;margin:24px 0}
+table{width:100%;border-collapse:collapse;font-size:.97rem}
+thead tr{background:var(--card)}
+th,td{padding:11px 14px;border:1px solid var(--border);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.88rem;text-transform:uppercase;letter-spacing:.03em}
+td:first-child{font-weight:500}
+.yes{color:#4ade80}
+.no{color:#f87171}
+.partial{color:#fbbf24}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:16px 0}
+.card h3{margin-top:0;font-size:1.05rem}
+
+/* Steps */
+.steps-block{background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:16px 0}
+.steps-block h3{margin-top:0;font-size:1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.steps-block ol{margin:0;padding-left:1.3em}
+.steps-block li{margin-bottom:8px}
+
+/* Note */
+.note{background:var(--bg-soft);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:16px 18px;color:var(--muted)}
+.note strong{color:var(--text)}
+
+/* CTA */
+.cta-box{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:22px 24px;margin:28px 0;display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between}
+.cta-box p{margin:0;font-size:1.05rem}
+.btn{display:inline-block;background:var(--accent);color:#fff;font-weight:600;padding:10px 22px;border-radius:8px;font-size:.97rem;white-space:nowrap}
+.btn:hover{background:var(--accent-2);text-decoration:none}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);background:transparent}
+
+/* FAQ */
+.faq details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:0 18px;margin-bottom:12px}
+.faq summary{cursor:pointer;padding:16px 0;font-weight:600;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;color:var(--accent);font-weight:700}
+.faq details[open] summary::after{content:"\2212"}
+.faq details[open] summary{border-bottom:1px solid var(--border)}
+.faq details p{color:var(--muted);margin:14px 0 16px}
+
+footer{border-top:1px solid var(--border);padding:32px 0 48px;text-align:center;color:var(--muted);font-size:.9rem;}
+footer a{margin:0 8px}
+@media(min-width:680px){h1{font-size:2.5rem}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="../">OpenCode Mobile</a> &rsaquo; vs Termux
+  </nav>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <h1>OpenCode Mobile vs Termux: AI Coding on Android Without the Setup Headaches</h1>
+    <p class="lead">
+      If you've tried to run an AI coding agent on your Android phone, you've probably ended up in
+      Termux — installing Node, fiddling with SSH keys, and squinting at a tiny shell prompt.
+      OpenCode Mobile is a purpose-built native Android client for the
+      <a href="https://github.com/sst/opencode">opencode</a> AI agent that skips all of that.
+      One URL (or a QR scan), and you're coding with AI from your pocket.
+    </p>
+    <div class="cta-box">
+      <p>Free and open-source. No SSH tunnel required.</p>
+      <a class="btn" href="../download/">Download OpenCode Mobile</a>
+    </div>
+  </div>
+</section>
+
+<section id="the-termux-path">
+  <div class="wrap">
+    <h2>The Termux path: what you're actually signing up for</h2>
+    <p>
+      Termux is a fantastic project — a real Linux environment on Android, beloved by
+      security researchers, sysadmins, and hackers. If you live in a terminal, it's a superpower.
+      But using it to run an AI coding agent day-to-day on a phone involves a surprising
+      amount of yak shaving before you write your first prompt.
+    </p>
+
+    <div class="steps-block">
+      <h3>Typical Termux + opencode setup journey</h3>
+      <ol>
+        <li>Install Termux from F-Droid (the Play Store version is outdated).</li>
+        <li>Run <code>pkg update &amp;&amp; pkg upgrade</code> and wait through package downloads.</li>
+        <li>Install Node.js: <code>pkg install nodejs</code> — then discover the version is older than opencode needs and fight with <code>nvm</code> in Termux.</li>
+        <li>Install opencode: <code>npm install -g opencode-ai</code> — and watch it compile native modules from source on your phone's ARM CPU for several minutes.</li>
+        <li>Set up your AI provider API key as an environment variable, being careful not to leak it in shell history.</li>
+        <li>Realize <code>opencode serve</code> needs a hostname/IP your other devices can reach — so now you're setting up an SSH reverse tunnel, ngrok, or Tailscale from inside Termux.</li>
+        <li>Deal with Termux's wakelock so Android doesn't kill the server mid-session.</li>
+        <li>Navigate the opencode TUI from a virtual keyboard on a 6-inch screen.</li>
+        <li>Repeat steps 3–8 after an Android update wipes your Termux prefix or a <code>pkg upgrade</code> breaks your Node version.</li>
+      </ol>
+    </div>
+
+    <p>
+      None of these steps are hard if you already know Linux well. But they add up to 30–90 minutes
+      before you write your first line of AI-assisted code, and maintenance is ongoing.
+      If the goal is just to <em>use</em> AI to code from your phone, there's a faster way.
+    </p>
+  </div>
+</section>
+
+<section id="opencode-mobile-path">
+  <div class="wrap">
+    <h2>The OpenCode Mobile path: three steps and done</h2>
+    <p>
+      OpenCode Mobile flips the model. Instead of running the agent <em>on</em> your phone, you run
+      the opencode server on hardware you already have — your laptop, a desktop, a VPS — where Node,
+      npm, and compute are plentiful. The phone is just the interface.
+    </p>
+
+    <div class="steps-block">
+      <h3>OpenCode Mobile setup</h3>
+      <ol>
+        <li>On your machine, install and start the server:
+          <pre style="margin-top:8px"><code>npm install -g opencode-ai
+OPENCODE_SERVER_PASSWORD=yourpassword opencode serve --hostname 0.0.0.0 --port 4096</code></pre>
+        </li>
+        <li>Make it reachable from your phone — connect both devices to
+          <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale</a>
+          (free tier), then use your machine's Tailscale IP, e.g. <code>http://100.x.x.x:4096</code>.
+          Or use the same LAN Wi-Fi if you're always at home.</li>
+        <li>Install OpenCode Mobile (via <a href="../download/">F-Droid or direct APK</a>),
+          tap <strong>Add Connection</strong>, enter the URL and password — done.</li>
+      </ol>
+    </div>
+
+    <p>
+      The whole process takes about 10–15 minutes, most of which is the Tailscale install.
+      After that, every subsequent session is: open app, tap your saved connection, start prompting.
+    </p>
+
+    <div class="note">
+      <strong>Prefer a QR code?</strong> The <a href="../guide/">setup guide</a> shows how to
+      generate a scannable connection QR code so you never have to type the URL or password
+      on a phone keyboard.
+    </div>
+  </div>
+</section>
+
+<section id="comparison">
+  <div class="wrap">
+    <h2>Side-by-side comparison</h2>
+    <p class="muted">How the two approaches differ for everyday AI coding use on Android.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Aspect</th>
+            <th>OpenCode Mobile</th>
+            <th>Termux + opencode</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Initial setup time</td>
+            <td class="yes">~10–15 minutes</td>
+            <td class="no">30–90 minutes (Node, native modules, tunnel)</td>
+          </tr>
+          <tr>
+            <td>Node.js version conflicts</td>
+            <td class="yes">None — server is on your real machine</td>
+            <td class="no">Common — Termux pkg lags behind upstream Node releases</td>
+          </tr>
+          <tr>
+            <td>Native module compilation</td>
+            <td class="yes">Not needed on the phone</td>
+            <td class="no">Slow ARM compilation on first install and upgrades</td>
+          </tr>
+          <tr>
+            <td>Android wakelock / background kill</td>
+            <td class="yes">Server runs on a real machine, not subject to Android's battery optimiser</td>
+            <td class="no">Must acquire wakelock; Android may kill Termux during long tasks</td>
+          </tr>
+          <tr>
+            <td>UI on a phone screen</td>
+            <td class="yes">Native Android UI — optimised for touch, streaming, swipe gestures</td>
+            <td class="partial">Terminal TUI — functional but cramped on a small screen</td>
+          </tr>
+          <tr>
+            <td>Diff review</td>
+            <td class="yes">Inline side-by-side diff viewer with approve/reject per file</td>
+            <td class="partial">Raw terminal diff output — hard to read on 6 inches</td>
+          </tr>
+          <tr>
+            <td>Credential security</td>
+            <td class="yes">Android Keystore via expo-secure-store</td>
+            <td class="partial">Shell env vars / plaintext config files in Termux home</td>
+          </tr>
+          <tr>
+            <td>Biometric unlock</td>
+            <td class="yes">Face ID / fingerprint gates the app and message sends</td>
+            <td class="no">Not available in terminal context</td>
+          </tr>
+          <tr>
+            <td>Multi-server management</td>
+            <td class="yes">Save multiple server profiles, switch instantly</td>
+            <td class="partial">Manage multiple SSH configs manually</td>
+          </tr>
+          <tr>
+            <td>CPU / battery on phone</td>
+            <td class="yes">Minimal — the app just renders a UI and streams HTTP/SSE</td>
+            <td class="no">Node + LLM API calls drain battery and heat the device</td>
+          </tr>
+          <tr>
+            <td>Works without internet</td>
+            <td class="yes">Yes — LAN or Tailscale, no public internet needed</td>
+            <td class="yes">Yes — if the LLM calls are also local</td>
+          </tr>
+          <tr>
+            <td>Free &amp; open-source</td>
+            <td class="yes">Yes — MIT license</td>
+            <td class="yes">Yes — Termux and opencode are both open-source</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="when-termux">
+  <div class="wrap">
+    <h2>When Termux still makes sense</h2>
+    <p>
+      This isn't a takedown of Termux — it's a genuinely powerful tool and the right choice for
+      several scenarios. Use Termux when:
+    </p>
+    <ul>
+      <li>You <strong>don't have another machine</strong> to run the server on and your phone is your primary computer.</li>
+      <li>You want a <strong>full Linux environment</strong> for general-purpose hacking, not just the opencode agent.</li>
+      <li>You're comfortable in a terminal and prefer text interfaces over native UIs.</li>
+      <li>You're doing <strong>air-gapped or highly restricted</strong> work and can't install anything from an external repo.</li>
+      <li>You need to run other CLI tools alongside the agent and want them in the same session.</li>
+    </ul>
+    <p>
+      If any of those apply, Termux is the right tool and you should use it.
+      OpenCode Mobile is for the complementary case: you have real hardware somewhere, you want to
+      code from your phone without babysitting a terminal session, and you want a UI that was
+      actually designed for Android.
+    </p>
+  </div>
+</section>
+
+<section id="use-cases">
+  <div class="wrap">
+    <h2>Real use cases where OpenCode Mobile wins on Android</h2>
+
+    <div class="card">
+      <h3>Reviewing a PR at the airport</h3>
+      <p>
+        You get a review request while in transit. Your opencode server is running at home on
+        Tailscale. Open OpenCode Mobile, connect, ask the agent to pull the branch and explain
+        the changes. It runs the git commands on your actual machine — full repo access, no
+        copy-paste. Approve the diff on your phone and push back, all without a laptop.
+      </p>
+      <p class="muted">
+        With Termux you'd need the server already running inside Termux, deal with the risk of Android
+        killing it mid-flight, and navigate the terminal diff on a touch keyboard.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Late-night hotfix from the couch</h3>
+      <p>
+        Something breaks in production. You're not at your desk. With OpenCode Mobile you describe
+        the bug, the agent locates the file, proposes a fix, and shows you the diff. Tap approve,
+        the server applies the change, you trigger your deploy pipeline from your phone. Fixed in
+        under 10 minutes without leaving the couch.
+      </p>
+      <p class="muted">
+        The Termux equivalent requires the session to still be alive (wakelock), the TUI to be
+        usable from the couch with a phone keyboard, and manual copy-paste if you need to review
+        the diff carefully.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Spinning up a new feature on the go</h3>
+      <p>
+        Commuting and have 20 minutes of high-quality thinking time? OpenCode Mobile lets you
+        direct the agent with natural language while the server runs the actual file edits and
+        tests. By the time you reach your destination the skeleton of a new feature is scaffolded
+        and waiting for your review.
+      </p>
+      <p class="muted">
+        Running opencode interactively in a Termux session on a phone keyboard for 20 minutes
+        on a moving train is not a comfortable experience. The native UI with large touch targets
+        and streaming responses is significantly better.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Multiple projects, multiple servers</h3>
+      <p>
+        OpenCode Mobile lets you save multiple server connections — one for your home lab running
+        a personal project, one for a VPS running a client project, one for a work machine on
+        Tailscale. Switch between them with a tap, each with its own credentials stored securely
+        in the Android Keystore.
+      </p>
+      <p class="muted">
+        With Termux you'd maintain separate SSH configs, Termux sessions, or shell aliases and
+        manually switch between them.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <h2>How the architecture works</h2>
+    <p>
+      OpenCode Mobile is a thin HTTP + SSE client. When you connect to your server, here is what
+      happens:
+    </p>
+    <ol>
+      <li>The app opens an SSE stream to your opencode server's <code>/global/event</code> endpoint.</li>
+      <li>You type a prompt — the app posts it to <code>/session/{id}/prompt_async</code>.</li>
+      <li>The server forwards the prompt to your configured LLM (Claude, GPT, a local model, whatever you set up).</li>
+      <li>Tokens stream back from the LLM to the server, and from the server over SSE to the app.</li>
+      <li>When the agent proposes a file change, the app renders the diff and waits for your approve/reject tap.</li>
+      <li>Your approval goes back to the server, which applies the change to the real filesystem.</li>
+    </ol>
+    <p>
+      The phone never holds your API keys. It never executes code. It never touches your files.
+      It is a smart terminal window, drawn as a native Android app. That is why it uses so little
+      battery and works perfectly even on a mid-range Android device.
+    </p>
+    <p>
+      The server can live on anything: a MacBook, a Linux desktop, a Raspberry Pi 5, a DigitalOcean
+      droplet, a home server. As long as the phone can reach it over the network, it works.
+    </p>
+  </div>
+</section>
+
+<section id="get-started">
+  <div class="wrap">
+    <h2>Getting started</h2>
+    <p>
+      If you already have a machine running <code>opencode serve</code>, installing the app takes
+      two minutes. If you're starting from scratch, the <a href="../guide/">full setup guide</a>
+      walks through every step — server install, Tailscale setup, app install, and first connection.
+    </p>
+
+    <h3>Quick start commands</h3>
+    <pre><code># On your machine (macOS, Linux, or WSL):
+npm install -g opencode-ai
+
+# Set a password and start the server bound to all interfaces:
+OPENCODE_SERVER_PASSWORD=yourpassword opencode serve --hostname 0.0.0.0 --port 4096
+
+# On your phone, install OpenCode Mobile:
+# F-Droid repo: https://dzianisv.github.io/opencode-mobile/fdroid/repo
+# Or: download APK from https://github.com/dzianisv/opencode-mobile/releases/latest</code></pre>
+
+    <p>
+      Then in the app: tap <strong>Add Connection</strong>, enter <code>http://&lt;tailscale-ip&gt;:4096</code>
+      and your password. That's it. You're coding with AI from Android.
+    </p>
+
+    <div class="cta-box">
+      <p>Skip the Termux rabbit hole — get OpenCode Mobile.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="../download/">Download for Android</a>
+        <a class="btn btn-ghost" href="../guide/">Read the setup guide</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Frequently asked questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Can I run opencode on Android without Termux?</summary>
+        <p>Yes. OpenCode Mobile is a native Android client that connects to an opencode server running on your laptop, desktop, or VPS. You don't need Termux, SSH keys, or any terminal emulation on the phone itself — just the app and a URL.</p>
+      </details>
+      <details>
+        <summary>What is the difference between using Termux and OpenCode Mobile?</summary>
+        <p>With Termux you install Node.js, set up SSH tunneling, manage API keys inside the emulated shell, and use a small-screen terminal as your UI. With OpenCode Mobile you install the app, enter your server URL (or scan a QR code), and get a full native Android interface — streaming chat, diff viewer, tool call approval — with credentials stored in the Android Keystore.</p>
+      </details>
+      <details>
+        <summary>Does OpenCode Mobile run the AI model on the phone?</summary>
+        <p>No. The AI model calls happen on your opencode server. The phone is a pure UI client — it streams results over HTTP/SSE. This is why it uses very little battery and works on any Android device, even older or lower-end ones.</p>
+      </details>
+      <details>
+        <summary>Is my code safe? Does it go through any third-party servers?</summary>
+        <p>No. The app communicates only with your own opencode server over your private network or a Tailscale tunnel. Your code, prompts, and responses never pass through OpenCode Mobile's (or anyone else's) servers. Your API keys live on the server, not the phone.</p>
+      </details>
+      <details>
+        <summary>Do I need Tailscale, or can I use something else?</summary>
+        <p>Tailscale is the easiest option (free tier is sufficient) but not required. Any method that makes your server reachable from the phone works: same LAN Wi-Fi, Cloudflare Tunnel, ngrok, a reverse SSH tunnel, or a public VPS. See the <a href="../guide/">setup guide</a> for examples of each.</p>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="../">Home</a>
+      <a href="../download/">Download</a>
+      <a href="../guide/">Setup guide</a>
+      <a href="../features/">Features</a>
+      <a href="../comparison/">Comparison</a>
+      <a href="../troubleshooting/">Troubleshooting</a>
+      <a href="https://github.com/dzianisv/opencode-mobile">GitHub</a>
+      <a href="../privacy/">Privacy policy</a>
+    </p>
+    <p class="muted">Free and open-source. Built by VIBE TECHNOLOGIES, LLC. Not affiliated with the OpenCode upstream project beyond using its open API.</p>
+  </div>
+</footer>
+
+</body>
+</html>

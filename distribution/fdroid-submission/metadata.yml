@@ -1,0 +1,68 @@
+AntiFeatures:
+  NonFreeNet:
+    en-US: The app connects to a user-self-hosted opencode server which may in turn
+      connect to proprietary AI services (OpenAI API, Anthropic API, Google Gemini).
+      The app itself is fully open source and does not require any specific provider.
+Categories:
+  - Development
+License: MIT
+AuthorName: VIBE TECHNOLOGIES, LLC
+AuthorEmail: support@agentlabs.cc
+WebSite: https://agentlabs.cc/opencode
+SourceCode: https://github.com/dzianisv/opencode-mobile
+IssueTracker: https://github.com/dzianisv/opencode-mobile/issues
+Changelog: https://github.com/dzianisv/opencode-mobile/releases
+
+AutoName: OpenCode
+
+RepoType: git
+Repo: https://github.com/dzianisv/opencode-mobile
+
+Binaries: https://github.com/dzianisv/opencode-mobile/releases/download/v%v/app-release-fdroid.apk
+
+Builds:
+  - versionName: 0.4.3
+    versionCode: 5
+    commit: c46f273ecda0269ba2dc165053096e63d2bf5160
+    subdir: android/app
+    sudo:
+      - apt-get update
+      - apt-get install npm
+    init:
+      - cd ../..
+      - npm install --legacy-peer-deps
+    gradle:
+      - yes
+    prebuild:
+      - cd ../..
+      - sed -i '/apply from.*sentry.gradle/d' android/app/build.gradle
+      - sed -i '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
+        node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - printf '\nkotlin.jvm.target.validation.mode=warning\n' >> android/gradle.properties
+      - sed -i '/firebase/d' node_modules/expo-notifications/android/build.gradle
+      - cp -a fdroid/expo-notifications-patches/.
+        node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/
+      - rm -f
+        node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/RemoteMessageSerializer.java
+        node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/model/triggers/FirebaseNotificationTrigger.kt
+      - sed -i '/installreferrer/d' node_modules/expo-application/android/build.gradle
+      - cp -a fdroid/expo-application-patches/. node_modules/expo-application/android/src/main/java/expo/modules/application/
+    scanignore:
+      - node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-screens/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
+      - node_modules/react-native/ReactAndroid/publish.gradle
+      - node_modules/react-native/sdks/hermesc/linux64-bin
+    scandelete:
+      - node_modules
+    ndk: 27.1.12297006
+
+AllowedAPKSigningKeys: 0c259d94e0ffea5d6319614b229d4b6bdc22de1f56e38e76948398d2df6aa099
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.4.3
+CurrentVersionCode: 5

@@ -1,0 +1,84 @@
+appId: cc.agentlabs.opencode
+name: All sessions across directories - list + open-across-project (regression #46/#48)
+---
+# New-feature regression coverage for the "all sessions across all projects"
+# list: src/stores/sessions.ts loadSessions() intentionally uses
+# clientForDirectory(undefined) (a directory-less client) so GET /session
+# returns sessions from every directory, not just the active connection's.
+#
+# Also locks in the fix for GitHub issues #46/#48: tapping a session that
+# belongs to a directory OTHER than the active connection's must actually
+# open it (src/stores/sessions.ts selectSession uses clientForDirectory(dir)
+# when the session's directory differs from the active one), not silently
+# fail or open the wrong session.
+#
+# The CI job starts `node tests/fixtures/mock-opencode-server.ts --port 4098
+# --seed-sessions` on the runner host BEFORE this flow runs. --seed-sessions
+# pre-populates two fixed-ID sessions before any connection is made:
+#   seed-default -> directory /mock/project        (matches the active
+#                   connection's default project — GET /project/current)
+#   seed-other   -> directory /mock/project/other-dir (a DIFFERENT directory)
+#
+# Why this can actually FAIL if #46/#48 regresses: the mock ENFORCES
+# per-directory scoping — GET /session/seed-other and
+# GET /session/seed-other/message return 404 unless the request carries
+# x-opencode-directory: /mock/project/other-dir. With the fix present, the
+# app threads the session's directory through selectSession ->
+# clientForDirectory, sends the right header, and the session screen renders.
+# Without it, the request goes out with the wrong (or no) directory header,
+# the mock 404s, and the session-screen assertions below (title, directory
+# badge, empty state) fail.
+
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "telemetry-consent-card"
+- tapOn:
+    id: "telemetry-decline-button"
+
+- assertVisible:
+    text: "No Connection"
+- tapOn:
+    id: "add-connection-button"
+- tapOn:
+    id: "connect-ip-input"
+- inputText: "127.0.0.1:4098"
+- hideKeyboard
+- tapOn:
+    id: "connect-submit-button"
+
+# 40s margin: see activation-positive.yaml — the connect handshake's own
+# fetches are individually capped at 30s (src/lib/sdk.ts REQUEST_TIMEOUT_MS).
+- extendedWaitUntil:
+    visible:
+      id: "connection-status-dot"
+    timeout: 40000
+- takeScreenshot: allsessions-S1_connected
+
+# Both seeded sessions must appear, even though only one belongs to the
+# active connection's own directory.
+- extendedWaitUntil:
+    visible:
+      text: "Default Project Session"
+    timeout: 15000
+- assertVisible:
+    text: "Cross-Project Session"
+- takeScreenshot: allsessions-S2_both_directories_listed
+
+# Open the session from the OTHER directory (#46/#48 regression).
+- tapOn:
+    id: "session-item-seed-other"
+- extendedWaitUntil:
+    visible:
+      id: "chat-message-input"
+    timeout: 15000
+- assertVisible:
+    text: "Cross-Project Session"
+- assertVisible:
+    text: "other-dir"
+# Confirms GET /session/seed-other/message actually resolved (empty state,
+# not stuck loading / errored) — i.e. the cross-directory session genuinely
+# opened, not just navigated to a dead screen.
+- assertVisible:
+    text: "Start a conversation"
+- takeScreenshot: allsessions-S3_cross_directory_session_opened

@@ -1,0 +1,10 @@
+{
+  "name": "oc-notify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode plugin: phone notifications via self-hosted ntfy",
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
+}

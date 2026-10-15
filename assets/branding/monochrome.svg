@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
+  <!-- Themed/monochrome launcher variant (Android 13+). Single-color white
+       silhouette on transparent; the OS tints it. Same safe-zone geometry
+       as adaptive-foreground.svg. -->
+  <g transform="translate(216 216) scale(0.43) translate(-512 -512)">
+    <rect x="232" y="232" width="560" height="560" rx="128" fill="none" stroke="#ffffff" stroke-width="52"/>
+    <polyline points="376,416 496,512 376,608" fill="none" stroke="#ffffff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="536" y="486" width="104" height="52" rx="10" fill="#ffffff"/>
+  </g>
+</svg>

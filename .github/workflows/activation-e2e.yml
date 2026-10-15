@@ -1,0 +1,207 @@
+name: Activation E2E (Maestro)
+
+# Deterministic regression coverage for the activation flow (first open ->
+# telemetry consent -> server URL entry -> connect -> send first message),
+# including the connect-time-401 negative case tied to the 0%-7-day-retention
+# / GitHub issue #76 investigation.
+#
+# Also runs (non-blocking — see scripts/run-e2e-flows.sh's CORE_FLOWS vs
+# NEWER_FLOWS split, and issue #104) newer surfaces merged after the initial
+# activation suite: DirectoryBrowserSheet's server-folder picker, the
+# directory-less "all sessions across all projects" list (+ the #46/#48
+# open-across-project regression), VariantPicker's reasoning-effort chip, and
+# DiffView/CodeBlock horizontal scroll. See .maestro/flows/directory-picker.yaml,
+# all-sessions.yaml, variant-picker.yaml, diff-scroll.yaml. These never once
+# ran to completion in CI (they sat behind the activation flows' stale
+# assertions fixed by PR #102) and need their own hardening — tracked in #104.
+#
+# Runs against tests/fixtures/mock-opencode-server.ts (a small dependency-free
+# HTTP+SSE stub matching the REAL client protocol read from src/lib/sdk.ts —
+# NOT a live opencode server, NOT a WebSocket), so the suite is fast and fully
+# self-contained: no external server, no LLM provider, no network flakiness.
+#
+# This is intentionally separate from cua-smoke.yml (the existing
+# vision-driven CUA harness): that one needs a live opencode server + an Azure
+# LLM and is exploratory/non-deterministic by design, so it isn't suited to
+# tight regression assertions like "a 401 must show a visible error."
+#
+# activation-positive.yaml does NOT assert on the SSE-streamed reply — see
+# the comment at the top of that file (issue #90 mode B / PR #102) for why:
+# this Android-emulator + Node-mock + adb-reverse combination reliably
+# stalls a long-lived SSE connection after its first chunk regardless of
+# client transport, a CI-harness limitation with no evidence it affects real
+# devices against a real server, so asserting on it here would be asserting
+# on the harness rather than the app.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "src/**"
+      - "tests/fixtures/**"
+      - ".maestro/**"
+      - ".github/workflows/activation-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "src/**"
+      - "tests/fixtures/**"
+      - ".maestro/**"
+      - ".github/workflows/activation-e2e.yml"
+  workflow_dispatch: {}
+
+jobs:
+  activation-e2e:
+    runs-on: ubuntu-latest
+    # Same npm install + expo prebuild + assembleRelease + emulator pipeline as
+    # cua-smoke.yml, which budgets 60 min (emulator-boot-timeout alone is 10 min).
+    # Typical runs finish well under this; the ceiling just avoids flaky kills
+    # on cold Gradle caches.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Add emulator to PATH
+        run: echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Purge stale generated sources
+        # Same mitigation as cua-smoke.yml (whose Gradle cache entries this job
+        # shares — the cache key/restore-keys are identical): the restore-keys
+        # prefix fallback can restore a generated autolinking tree from a
+        # previous package id, making compileReleaseJavaWithJavac fail against
+        # the old package (ai.opencode.mobile vs cc.agentlabs.opencode). Delete
+        # generated sources so prebuild + Gradle regenerate them.
+        run: rm -rf android/app/build/generated android/build/generated android/app/build/intermediates
+
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies & build APK
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+        run: |
+          npm install --legacy-peer-deps
+          npx expo prebuild --platform android --no-install
+          keytool -genkey -v -keystore android/app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          cd android && ./gradlew assembleRelease
+
+      - name: Start mock opencode servers
+        run: |
+          set -x
+          mkdir -p artifacts/screenshots
+          # Normal mode on 4096 (positive flow) and --fail-auth on 4097 (negative flow).
+          # 4098 is normal mode + --seed-sessions (two pre-populated sessions in two
+          # different directories, for all-sessions.yaml). 4099 is a fresh normal-mode
+          # instance shared by directory-picker.yaml and variant-picker.yaml (its fake
+          # file tree / provider variants / project list don't affect each other).
+          # 4100 is normal mode + --seed-diff (one session with a pre-existing wide
+          # edit-diff tool call + wide code block, for diff-scroll.yaml / issue #21).
+          # All bind 0.0.0.0 so the emulator can reach them via 10.0.2.2.
+          nohup node tests/fixtures/mock-opencode-server.ts --port 4096 > /tmp/mock-4096.log 2>&1 &
+          nohup node tests/fixtures/mock-opencode-server.ts --port 4097 --fail-auth > /tmp/mock-4097.log 2>&1 &
+          nohup node tests/fixtures/mock-opencode-server.ts --port 4098 --seed-sessions > /tmp/mock-4098.log 2>&1 &
+          nohup node tests/fixtures/mock-opencode-server.ts --port 4099 > /tmp/mock-4099.log 2>&1 &
+          nohup node tests/fixtures/mock-opencode-server.ts --port 4100 --seed-diff > /tmp/mock-4100.log 2>&1 &
+          for port in 4096 4097 4098 4099 4100; do
+            for i in $(seq 1 30); do
+              if curl -sf --connect-timeout 1 -m 3 "http://127.0.0.1:${port}/global/health" > /dev/null 2>&1; then
+                echo "mock server on ${port} responded (may be 401, that's expected on 4097)"
+                break
+              fi
+              # 4097 always 401s -> curl -sf treats that as failure, so also accept "connection made"
+              if curl -s --connect-timeout 1 -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/global/health" 2>/dev/null | grep -qE '^[0-9]+$'; then
+                echo "mock server on ${port} is up (got an HTTP response)"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "::error::mock server on port ${port} did not come up in 30s"
+                cat "/tmp/mock-${port}.log" || true
+                exit 1
+              fi
+              sleep 1
+            done
+          done
+
+      - name: Run activation E2E flows on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 28
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          # One script file, not one `sh -c` per line — run-e2e-flows.sh does the
+          # adb reverse port-forwarding, runs every flow, and captures logcat on
+          # exit. (Running maestro line-by-line here broke `cd` persistence and
+          # left no diagnostics.)
+          script: bash scripts/run-e2e-flows.sh
+
+      - name: Mock server logs
+        if: always()
+        run: |
+          echo "--- 4096 (normal) ---"; cat /tmp/mock-4096.log || true
+          echo "--- 4097 (fail-auth) ---"; cat /tmp/mock-4097.log || true
+          echo "--- 4098 (seed-sessions) ---"; cat /tmp/mock-4098.log || true
+          echo "--- 4099 (normal, directory-picker + variant-picker) ---"; cat /tmp/mock-4099.log || true
+          echo "--- 4100 (seed-diff) ---"; cat /tmp/mock-4100.log || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: activation-e2e-screenshots-${{ github.run_number }}
+          path: artifacts/screenshots/*.png
+          if-no-files-found: warn
+
+      - name: Package maestro debug + logcat
+        if: always()
+        run: |
+          if [ -d artifacts/diag ]; then
+            tar -C artifacts -czf artifacts/activation-e2e-debug.tar.gz diag
+          fi
+
+      - name: Upload maestro debug + logcat
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: activation-e2e-debug-${{ github.run_number }}
+          path: artifacts/activation-e2e-debug.tar.gz
+          if-no-files-found: warn
+          # Archiving preserves Maestro's hidden `.maestro` hierarchy and
+          # prevents upload-artifact from validating generated directory names
+          # such as "consent -> connect", whose `>` character is rejected.

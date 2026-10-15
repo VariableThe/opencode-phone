@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Access OpenCode From Your Phone Remotely — Tailscale, Cloudflare Tunnel &amp; ngrok</title>
+<meta name="description" content="Reach your self-hosted opencode server from your Android phone anywhere: step-by-step Tailscale, Cloudflare Tunnel, and ngrok setups, with the trade-offs of each." />
+<meta name="keywords" content="connect opencode mobile over Tailscale, access opencode from phone remotely, opencode tunnel, opencode cloudflare tunnel, opencode ngrok, remote opencode server android" />
+<meta name="theme-color" content="#3b82f6" />
+<link rel="canonical" href="https://dzianisv.github.io/opencode-mobile/remote-access/" />
+<link rel="icon" type="image/png" href="../fdroid/repo/icons/icon.png" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="OpenCode Mobile" />
+<meta property="og:title" content="Access OpenCode From Your Phone Remotely — Tailscale, Cloudflare Tunnel &amp; ngrok" />
+<meta property="og:description" content="Reach your self-hosted opencode server from your Android phone anywhere. Step-by-step Tailscale, Cloudflare Tunnel, and ngrok setups, with the trade-offs of each." />
+<meta property="og:url" content="https://dzianisv.github.io/opencode-mobile/remote-access/" />
+<meta property="og:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Access OpenCode From Your Phone Remotely — Tailscale, Cloudflare Tunnel &amp; ngrok" />
+<meta name="twitter:description" content="Reach your self-hosted opencode server from your Android phone anywhere. Tailscale, Cloudflare Tunnel, and ngrok, step by step." />
+<meta name="twitter:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Structured data: Breadcrumb -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "OpenCode Mobile", "item": "https://dzianisv.github.io/opencode-mobile/" },
+    { "@type": "ListItem", "position": 2, "name": "Remote Access", "item": "https://dzianisv.github.io/opencode-mobile/remote-access/" }
+  ]
+}
+</script>
+
+<!-- Structured data: HowTo (Tailscale) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to connect OpenCode Mobile to your server over Tailscale",
+  "description": "Put your opencode server and your Android phone on the same private Tailscale network so you can reach the server from anywhere without opening any ports.",
+  "totalTime": "PT10M",
+  "tool": [
+    { "@type": "HowToTool", "name": "A computer running opencode serve" },
+    { "@type": "HowToTool", "name": "A free Tailscale account" },
+    { "@type": "HowToTool", "name": "An Android phone with the OpenCode Mobile app" }
+  ],
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Install Tailscale on your server",
+      "text": "Install Tailscale on the machine running opencode serve and sign in. Note its Tailscale IP (100.x.x.x).",
+      "url": "https://dzianisv.github.io/opencode-mobile/remote-access/#tailscale"
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Install Tailscale on your phone",
+      "text": "Install the Tailscale app on your Android phone and sign in with the same account, so both devices join the same tailnet.",
+      "url": "https://dzianisv.github.io/opencode-mobile/remote-access/#tailscale"
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Bind opencode to the network and set a password",
+      "text": "Run opencode serve bound to 0.0.0.0 with a server password set, so it accepts connections over the tailnet.",
+      "url": "https://dzianisv.github.io/opencode-mobile/remote-access/#tailscale"
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Connect from the app",
+      "text": "In OpenCode Mobile, add a connection using the server's Tailscale IP and port, enter the password, and connect.",
+      "url": "https://dzianisv.github.io/opencode-mobile/remote-access/#tailscale"
+    }
+  ]
+}
+</script>
+
+<!-- Structured data: FAQ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Which is the best way to access opencode from my phone remotely?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Tailscale is the best default. It puts your phone and server on the same encrypted private network, requires no open ports and no public URL, and stays connected as you move between Wi-Fi and cellular. Use a Cloudflare Tunnel or ngrok only if you specifically need a public HTTPS URL." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to open ports on my router to use opencode from my phone?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. With Tailscale or a Cloudflare/ngrok tunnel you do not open any inbound ports. Avoid forwarding the opencode port directly to the public internet; it is safer to use a tunnel or a private mesh network." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is my code safe when I access opencode remotely?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The opencode agent and your AI provider keys stay on your own server. Tailscale traffic is end-to-end encrypted (WireGuard); Cloudflare Tunnel and ngrok serve over HTTPS/TLS. OpenCode Mobile only stores your server URL and password, kept in the Android Keystore. There is no telemetry by default." }
+    },
+    {
+      "@type": "Question",
+      "name": "Does opencode keep running when my phone screen is off?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The agent runs on your server, not the phone, so long tasks continue even if your phone sleeps or loses connection. When you reopen the app and reconnect, you pick the session back up." }
+    }
+  ]
+}
+</script>
+
+<style>
+:root{
+  --bg:#0b0f17;
+  --bg-soft:#121826;
+  --card:#161d2e;
+  --border:#243049;
+  --text:#e6ebf5;
+  --muted:#9aa6be;
+  --accent:#3b82f6;
+  --accent-2:#2563eb;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+section{padding:40px 0;border-top:1px solid var(--border)}
+section:first-of-type{border-top:none}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h1{font-size:2.1rem}
+h2{font-size:1.5rem}
+h3{font-size:1.15rem;margin-top:1.2em}
+code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:2px 6px;
+  font-size:.9em;
+  word-break:break-all;
+}
+pre{
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  overflow-x:auto;
+}
+pre code{background:none;border:none;padding:0;word-break:normal}
+.crumbs{font-size:.9rem;color:var(--muted);padding-top:24px}
+.crumbs a{color:var(--muted)}
+.crumbs a:hover{color:var(--accent)}
+.lead{font-size:1.12rem;color:var(--muted)}
+.note{
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-left:3px solid var(--accent);
+  border-radius:10px;
+  padding:16px 18px;
+  color:var(--muted);
+}
+.note strong{color:var(--text)}
+.muted{color:var(--muted)}
+ol.steps{padding-left:0;list-style:none;counter-reset:step;margin:0}
+ol.steps>li{
+  position:relative;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:20px 22px 18px 64px;
+  margin-bottom:16px;
+  counter-increment:step;
+}
+ol.steps>li::before{
+  content:counter(step);
+  position:absolute;
+  left:18px;top:20px;
+  width:30px;height:30px;
+  background:var(--accent);
+  color:#fff;font-weight:700;
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+}
+ol.steps h3{margin-top:0}
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.btn{
+  display:inline-block;
+  padding:12px 22px;
+  border-radius:10px;
+  font-weight:600;
+  font-size:1rem;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+}
+.btn:hover{text-decoration:none;border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+ul.tips li{margin-bottom:10px}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:.95rem}
+th,td{text-align:left;padding:10px 12px;border:1px solid var(--border);vertical-align:top}
+th{background:var(--bg-soft);color:var(--text)}
+td{color:var(--muted)}
+footer{
+  border-top:1px solid var(--border);
+  padding:32px 0 48px;
+  text-align:center;
+  color:var(--muted);
+  font-size:.9rem;
+}
+footer a{margin:0 8px}
+@media(min-width:680px){
+  h1{font-size:2.5rem}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="../">OpenCode Mobile</a> &rsaquo; Remote Access
+  </nav>
+</div>
+
+<main>
+<section>
+  <div class="wrap">
+    <h1>Access opencode from your phone, remotely</h1>
+    <p class="lead">The hardest part of running an AI coding agent from your phone isn't the app — it's reaching your <a href="https://github.com/sst/opencode">opencode</a> server when you're away from home. This page covers the three reliable ways to do it from <a href="../">OpenCode Mobile</a> on Android: <strong>Tailscale</strong> (recommended), a <strong>Cloudflare Tunnel</strong>, and <strong>ngrok</strong> — with the trade-offs of each.</p>
+    <p>OpenCode Mobile is a thin client. The agent and your AI provider keys live on a machine you control; the app just connects to it over the network. So the goal here is simply: make your server reachable from your phone, securely, from anywhere.</p>
+    <div class="note">
+      <p><strong>Before you start:</strong> make sure <code>opencode serve</code> runs and you can connect on the same Wi-Fi first. If that works, remote access is only about reaching the same server from elsewhere. New here? Start with the <a href="../guide/">setup guide</a>.</p>
+    </div>
+  </div>
+</section>
+
+<section id="which">
+  <div class="wrap">
+    <h2>Which method should I use?</h2>
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Best for</th><th>Open ports?</th><th>Public URL?</th><th>Cost</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Tailscale</strong></td><td>Your own daily use. Private, always-on, set-and-forget.</td><td>No</td><td>No (private 100.x IP)</td><td>Free</td></tr>
+        <tr><td><strong>Cloudflare Tunnel</strong></td><td>A stable public HTTPS URL, e.g. behind your own domain.</td><td>No</td><td>Yes (HTTPS)</td><td>Free</td></tr>
+        <tr><td><strong>ngrok</strong></td><td>Quick one-off testing from anywhere.</td><td>No</td><td>Yes (HTTPS)</td><td>Free tier</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">For your own phone, <strong>Tailscale is the right default</strong>: nothing is exposed to the public internet, it survives switching between Wi-Fi and cellular, and there are no ports to open. Use a tunnel only when you specifically need a public URL.</p>
+    <div class="note" style="margin-top:14px">
+      <p><strong>Don't port-forward the raw opencode port to the internet.</strong> Use a private mesh (Tailscale) or an authenticated tunnel. Whatever you pick, always set <code>OPENCODE_SERVER_PASSWORD</code> so the agent isn't open to anyone who finds the address.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tailscale">
+  <div class="wrap">
+    <h2>Option 1 — Tailscale (recommended)</h2>
+    <p>Tailscale puts your server and phone on the same private, encrypted network (a "tailnet") built on WireGuard. Your server gets a stable <code>100.x.x.x</code> IP that only your devices can reach — from any network, with no ports opened.</p>
+    <ol class="steps">
+      <li>
+        <h3>Install Tailscale on your server</h3>
+        <p>Install it on the machine running opencode and sign in:</p>
+        <pre><code>curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up</code></pre>
+        <p>Find the server's tailnet IP:</p>
+        <pre><code>tailscale ip -4
+# e.g. 100.101.102.103</code></pre>
+      </li>
+      <li>
+        <h3>Install Tailscale on your phone</h3>
+        <p>Install the <strong>Tailscale</strong> app from F-Droid or Google Play and sign in with the <em>same account</em>. Both devices now share one private network. (You don't need a VPN profile for anything else — Tailscale only routes traffic to your tailnet.)</p>
+      </li>
+      <li>
+        <h3>Run opencode bound to the network with a password</h3>
+        <p>Bind to <code>0.0.0.0</code> so it accepts tailnet connections, and set a password:</p>
+        <pre><code>OPENCODE_SERVER_PASSWORD=yourpassword \
+  opencode serve --hostname 0.0.0.0 --port 4096</code></pre>
+        <p class="muted">Tailscale already restricts who can reach the port to your own devices; the password is a second layer.</p>
+      </li>
+      <li>
+        <h3>Connect from OpenCode Mobile</h3>
+        <p>Open the app &rarr; <strong>Add Connection</strong> &rarr; use the Tailscale IP and port, then enter the password:</p>
+        <pre><code>http://100.101.102.103:4096</code></pre>
+        <p>That's it. This URL works from your home Wi-Fi, a coffee shop, or cellular — anywhere your phone has internet.</p>
+      </li>
+    </ol>
+    <p class="muted"><strong>Tip:</strong> enable <a href="https://tailscale.com/kb/1081/magicdns">MagicDNS</a> and you can use the machine's name instead of the IP, e.g. <code>http://my-laptop:4096</code>.</p>
+  </div>
+</section>
+
+<section id="cloudflare">
+  <div class="wrap">
+    <h2>Option 2 — Cloudflare Tunnel</h2>
+    <p>A Cloudflare Tunnel gives your server a public HTTPS URL with no open ports. Good when you want a stable address (optionally on your own domain) rather than a private IP.</p>
+    <ol class="steps">
+      <li>
+        <h3>Install cloudflared on your server</h3>
+        <p>Install Cloudflare's <code>cloudflared</code> daemon (see <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/">Cloudflare's downloads</a> for your OS).</p>
+      </li>
+      <li>
+        <h3>Start opencode with a password</h3>
+        <pre><code>OPENCODE_SERVER_PASSWORD=yourpassword \
+  opencode serve --hostname 127.0.0.1 --port 4096</code></pre>
+        <p class="muted">With a tunnel you can keep opencode bound to localhost — cloudflared connects to it locally and exposes it.</p>
+      </li>
+      <li>
+        <h3>Open a quick tunnel</h3>
+        <p>For a throwaway URL, no account needed:</p>
+        <pre><code>cloudflared tunnel --url http://localhost:4096</code></pre>
+        <p>It prints a URL like <code>https://random-words.trycloudflare.com</code>. For a permanent URL on your own domain, use a <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/">named tunnel</a> instead.</p>
+      </li>
+      <li>
+        <h3>Connect from the app</h3>
+        <p>Add a connection in OpenCode Mobile using the full HTTPS URL and your password:</p>
+        <pre><code>https://random-words.trycloudflare.com</code></pre>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="ngrok">
+  <div class="wrap">
+    <h2>Option 3 — ngrok</h2>
+    <p>ngrok is the fastest way to get a public URL for a quick test. Great for trying things out; for daily use prefer Tailscale or a named Cloudflare Tunnel.</p>
+    <ol class="steps">
+      <li>
+        <h3>Install ngrok and add your authtoken</h3>
+        <pre><code># install per https://ngrok.com/download, then:
+ngrok config add-authtoken YOUR_TOKEN</code></pre>
+      </li>
+      <li>
+        <h3>Run opencode with a password</h3>
+        <pre><code>OPENCODE_SERVER_PASSWORD=yourpassword \
+  opencode serve --hostname 127.0.0.1 --port 4096</code></pre>
+      </li>
+      <li>
+        <h3>Expose the port</h3>
+        <pre><code>ngrok http 4096</code></pre>
+        <p>ngrok prints a forwarding URL like <code>https://abcd-1234.ngrok-free.app</code>.</p>
+      </li>
+      <li>
+        <h3>Connect from the app</h3>
+        <p>Use the ngrok HTTPS URL and your password in OpenCode Mobile. Note the URL changes each run on the free tier.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="troubleshoot">
+  <div class="wrap">
+    <h2>Remote-access troubleshooting</h2>
+    <ul class="tips">
+      <li><strong>Connects on Wi-Fi but not remotely?</strong> You're likely using the LAN IP (<code>192.168.x.x</code>), which only works on the same network. Switch to the Tailscale IP or your tunnel URL.</li>
+      <li><strong>Tailscale shows offline?</strong> Confirm both devices are signed into the <em>same</em> account and listed as connected in the Tailscale admin console, then retry the <code>100.x</code> IP.</li>
+      <li><strong>Tunnel URL refuses the connection?</strong> The tunnel must point at the exact port opencode is listening on. If opencode is on <code>127.0.0.1:4096</code>, the tunnel target must be <code>localhost:4096</code>.</li>
+      <li><strong>HTTPS tunnel but app can't connect?</strong> Use the full <code>https://</code> URL with no trailing path. Don't mix <code>http</code> and <code>https</code>.</li>
+      <li><strong>Wrong password?</strong> The app password must match <code>OPENCODE_SERVER_PASSWORD</code> exactly.</li>
+      <li><strong>Long task, flaky signal?</strong> The agent runs server-side, so work continues even if the phone disconnects. Reopen the app and reconnect to resume the session.</li>
+    </ul>
+    <p class="muted">More fixes on the <a href="../troubleshooting/">troubleshooting page</a>.</p>
+  </div>
+</section>
+
+<section id="next">
+  <div class="wrap">
+    <h2>Get the app and connect from anywhere</h2>
+    <p>Set up Tailscale once and you'll reach your AI coding agent from your phone wherever you are — encrypted, with your keys staying on your own machine.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://dzianisv.github.io/opencode-mobile/fdroid/repo">Get it on F-Droid</a>
+      <a class="btn" href="https://github.com/dzianisv/opencode-mobile/releases/latest">Download APK</a>
+      <a class="btn" href="../guide/">Full setup guide</a>
+    </div>
+    <p style="margin-top:20px">Related: <a href="../opencode-on-phone/">How to use OpenCode on your phone</a> &middot; <a href="../guide/">Setup guide</a> &middot; <a href="../troubleshooting/">Troubleshooting</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="../">Home</a>
+      <a href="../download/">Download</a>
+      <a href="../guide/">Setup guide</a>
+      <a href="../opencode-on-phone/">OpenCode on your phone</a>
+      <a href="../features/">Features</a>
+      <a href="../troubleshooting/">Troubleshooting</a>
+      <a href="https://github.com/dzianisv/opencode-mobile">GitHub</a>
+      <a href="https://dzianisv.github.io/opencode-mobile/fdroid/repo">F-Droid repo</a>
+      <a href="../privacy/">Privacy policy</a>
+      <a href="https://github.com/dzianisv/opencode-mobile/blob/main/LICENSE">MIT License</a>
+    </p>
+    <p class="muted">Free and open-source. Built by VIBE TECHNOLOGIES, LLC.</p>
+  </div>
+</footer>
+
+</body>
+</html>

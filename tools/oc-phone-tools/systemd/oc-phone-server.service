@@ -1,0 +1,20 @@
+[Unit]
+Description=opencode serve for oc-phone (Tailnet only, :4096)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+# Mirrors the ntfy.service conventions: Tailnet-IP-only bind, journal logs,
+# Restart=on-failure. The Tailscale IPv4 is resolved at start time (every
+# start, including restarts), so a changed Tailnet IP is picked up by
+# `systemctl --user restart oc-phone-server` with no unit edit needed.
+# Credentials come from the env file (bare KEY=value lines, no `export`).
+EnvironmentFile=%h/.config/oc-phone/env
+Environment=PATH=%h/.local/bin:%h/.opencode/bin:/usr/bin:/bin
+ExecStart=/bin/bash -c 'IP="$(tailscale ip -4 2>/dev/null | head -n1)"; [ -n "$IP" ] || { echo "oc-phone-server: no Tailscale IPv4 (is tailscaled up?)" >&2; exit 1; }; echo "oc-phone-server: binding ${IP}:4096"; exec opencode serve --hostname "$IP" --port 4096'
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

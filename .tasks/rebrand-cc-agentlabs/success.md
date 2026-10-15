@@ -1,0 +1,1 @@
+Task done when: `publish-play-store.yml` builds an `app-release.aab` with applicationId `cc.agentlabs.opencode` (build+upload steps green) AND `cua-smoke.yml` passes — real emulator launches `cc.agentlabs.opencode/.MainActivity` and the vision-LLM E2E smoke completes. (Play Store upload itself = teammate-owned, out of this slice.)

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenCode Mobile — OpenCode AI Coding Agent on Android</title>
+<meta name="description" content="Run opencode serve on your laptop or VPS. OpenCode Mobile connects from your Android phone — stream AI sessions, review diffs, approve tool calls. Best with Tailscale." />
+<meta name="keywords" content="OpenCode Mobile, OpenCode Android client, AI coding agent on Android, self-hosted AI coding, mobile coding agent, OpenCode app, open source Android coding" />
+<meta name="theme-color" content="#3b82f6" />
+<link rel="canonical" href="https://dzianisv.github.io/opencode-mobile/" />
+<link rel="icon" type="image/png" href="fdroid/repo/icons/icon.png" />
+<!-- Vercel Web Analytics — privacy-first, no cookies -->
+<script defer src="https://cdn.vercel-insights.com/v1/speed-insights/script.js"></script>
+<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="OpenCode Mobile" />
+<meta property="og:title" content="OpenCode Mobile — OpenCode AI Coding Agent on Android" />
+<meta property="og:description" content="Remote control for opencode serve. Run opencode on your machine, drive it from your Android phone — stream sessions, review diffs, approve tool calls. Best with Tailscale." />
+<meta property="og:url" content="https://dzianisv.github.io/opencode-mobile/" />
+<meta property="og:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="OpenCode Mobile — OpenCode AI Coding Agent on Android" />
+<meta name="twitter:description" content="Remote control for opencode serve. Run opencode on your machine, drive it from your Android phone — stream sessions, review diffs, approve tool calls. Best with Tailscale." />
+<meta name="twitter:image" content="https://dzianisv.github.io/opencode-mobile/og.png" />
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "OpenCode Mobile",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Android",
+  "description": "Remote control for opencode serve. Run opencode on your laptop or VPS, connect from your Android phone — stream AI sessions, review diffs, and approve tool calls from anywhere. Best with Tailscale.",
+  "url": "https://dzianisv.github.io/opencode-mobile/",
+  "downloadUrl": "https://github.com/dzianisv/opencode-mobile/releases/latest",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "VIBE TECHNOLOGIES, LLC"
+  }
+}
+</script>
+
+<!-- Structured data: FAQ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is OpenCode Mobile free?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. OpenCode Mobile is completely free and open source under the MIT license. There is no feature gate, no ads, and no analytics you did not opt into."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need my own server?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. OpenCode Mobile is a client, not a hosted service. You run an OpenCode server yourself with `opencode serve` (on a laptop, desktop, or VPS) and the app connects to it over the network."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is it on Google Play?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not publicly yet — Google Play is in internal testing only. You can install it today on Android via our F-Droid self-hosted repo (https://dzianisv.github.io/opencode-mobile/fdroid/repo) or the direct signed APK."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there an iOS app?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not for download yet. The iPhone and iPad build is in active development, including native build CI and TestFlight automation."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where do my API keys live?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "On your own OpenCode server. You bring your own AI provider keys (OpenAI, Anthropic, Gemini, etc.) and configure them on the server. The app never touches them and never proxies your code or conversations through anyone else's servers."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I install it?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "On Android, add the F-Droid repo https://dzianisv.github.io/opencode-mobile/fdroid/repo in any F-Droid client and install OpenCode Mobile, or download the latest signed APK from https://github.com/dzianisv/opencode-mobile/releases/latest."
+      }
+    }
+  ]
+}
+</script>
+
+<style>
+:root{
+  --bg:#0b0f17;
+  --bg-soft:#121826;
+  --card:#161d2e;
+  --border:#243049;
+  --text:#e6ebf5;
+  --muted:#9aa6be;
+  --accent:#3b82f6;
+  --accent-2:#2563eb;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+section{padding:48px 0;border-top:1px solid var(--border)}
+section:first-of-type{border-top:none}
+h1,h2,h3{line-height:1.25;margin:0 0 .5em}
+h2{font-size:1.5rem}
+code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:2px 6px;
+  font-size:.9em;
+  word-break:break-all;
+}
+pre{
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  overflow-x:auto;
+}
+pre code{background:none;border:none;padding:0;word-break:normal}
+
+/* Hero */
+.hero{
+  text-align:center;
+  padding:64px 0 56px;
+  background:radial-gradient(900px 360px at 50% -10%,rgba(59,130,246,.18),transparent 70%);
+}
+.logo{width:84px;height:84px;margin:0 auto 20px;display:block}
+.hero h1{font-size:2.3rem;margin-bottom:.2em}
+.tagline{font-size:1.15rem;color:var(--muted);max-width:560px;margin:0 auto 28px}
+.cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn{
+  display:inline-block;
+  padding:12px 22px;
+  border-radius:10px;
+  font-weight:600;
+  font-size:1rem;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+}
+.btn:hover{text-decoration:none;border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+
+/* Features */
+.features{list-style:none;padding:0;margin:0;display:grid;gap:14px;grid-template-columns:1fr}
+.features li{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px 18px;
+}
+.features b{color:var(--text)}
+.features span{color:var(--muted);display:block;font-size:.95rem}
+
+/* Notes */
+.note{
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  border-left:3px solid var(--accent);
+  border-radius:10px;
+  padding:16px 18px;
+  color:var(--muted);
+}
+.note strong{color:var(--text)}
+.muted{color:var(--muted)}
+.steps{padding-left:1.2em}
+.steps li{margin-bottom:10px}
+
+/* FAQ */
+.faq details{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:0 18px;
+  margin-bottom:12px;
+}
+.faq summary{
+  cursor:pointer;
+  padding:16px 0;
+  font-weight:600;
+  list-style:none;
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;color:var(--accent);font-weight:700}
+.faq details[open] summary::after{content:"\2212"}
+.faq details[open] summary{border-bottom:1px solid var(--border)}
+.faq details p{color:var(--muted);margin:14px 0 16px}
+
+footer{
+  border-top:1px solid var(--border);
+  padding:32px 0 48px;
+  text-align:center;
+  color:var(--muted);
+  font-size:.9rem;
+}
+footer a{margin:0 8px}
+
+@media(min-width:680px){
+  .features{grid-template-columns:1fr 1fr}
+  .hero h1{font-size:2.8rem}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <svg class="logo" viewBox="0 0 84 84" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenCode Mobile logo">
+      <rect x="2" y="2" width="80" height="80" rx="20" fill="#161d2e" stroke="#3b82f6" stroke-width="3"/>
+      <path d="M33 30 L23 42 L33 54" stroke="#3b82f6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M51 30 L61 42 L51 54" stroke="#3b82f6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="46" y1="26" x2="38" y2="58" stroke="#9aa6be" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+    <h1>OpenCode Mobile</h1>
+    <p class="tagline">Run <code>opencode serve</code> on your laptop or VPS. OpenCode Mobile connects to it from your phone — stream AI sessions, review diffs, and approve tool calls from anywhere. Best with Tailscale.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="download/">Download for Android</a>
+      <a class="btn" href="https://dzianisv.github.io/opencode-mobile/fdroid/repo">Get it on F-Droid</a>
+      <a class="btn" href="guide/">Setup guide</a>
+      <a class="btn" href="https://github.com/dzianisv/opencode-mobile">View on GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="what">
+  <div class="wrap">
+    <h2>What is OpenCode Mobile?</h2>
+    <p>OpenCode Mobile is a remote control for <a href="https://github.com/sst/opencode">opencode</a>. Start <code>opencode serve --hostname 0.0.0.0 --port 4096</code> on your machine, point the app at it, and you're driving a full AI coding session from your phone. It speaks the opencode HTTP + SSE API directly — no middleman, no cloud relay.</p>
+    <p>The app has <strong>zero AI built in</strong>. All inference runs on your server with your own API keys. The recommended connectivity setup is <strong>Tailscale</strong>: install it on both your laptop and phone and your laptop gets a stable private hostname that works from anywhere, no port forwarding required. You can also use WireGuard, Cloudflare Tunnel, ngrok, or plain LAN. It is <strong>free and open-source</strong> (MIT) — no account, no ads, no telemetry unless you opt in.</p>
+  </div>
+</section>
+
+<section id="screenshots">
+  <div class="wrap">
+    <h2>See it in action</h2>
+    <p class="muted" style="margin-bottom:18px">Connect to your server, start a session, watch the agent work — all from your phone.</p>
+    <div style="text-align:center;margin-bottom:28px">
+      <video autoplay loop muted playsinline
+        style="max-width:320px;width:100%;border-radius:18px;border:1px solid rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.4)"
+        poster="screenshots/01.png">
+        <source src="demo.mp4" type="video/mp4" />
+        <img src="demo.gif" alt="OpenCode Mobile demo: connect to opencode serve, start a session, stream AI responses" style="max-width:320px;width:100%;border-radius:18px" />
+      </video>
+      <p class="muted" style="font-size:.85rem;margin-top:8px">10× speed — full session from connect to AI reply</p>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center">
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/01.png" alt="OpenCode Mobile: add connection screen — enter your opencode server URL" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Connect to your opencode server</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/02.png" alt="OpenCode Mobile: sessions list loaded from server" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Sessions load from your server</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/03.png" alt="OpenCode Mobile: session chat view, message sent to AI agent" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Send tasks to your AI agent</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/04.png" alt="OpenCode Mobile: AI agent running tool calls — reading and writing files" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Watch tool calls stream live</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/05.png" alt="OpenCode Mobile: AI agent writing TypeScript files to disk" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">File writes happen on your server</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/06.png" alt="OpenCode Mobile: completed coding task — hello.ts created successfully" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Task complete — code on your machine</figcaption>
+      </figure>
+      <figure style="margin:0;flex:1 1 200px;max-width:260px">
+        <img src="screenshots/07.png" alt="OpenCode Mobile: settings screen with AI model selection" width="1280" height="2560" loading="lazy" style="width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.08)" />
+        <figcaption class="muted" style="text-align:center;font-size:.9rem;margin-top:8px">Pick any model your server supports</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Key features</h2>
+    <ul class="features">
+      <li><b>Multi-connection management</b><span>Manage multiple OpenCode servers — local network, Cloudflare Tunnel, ngrok, or Tailscale.</span></li>
+      <li><b>Streaming chat</b><span>Token-by-token streaming responses directly from your OpenCode server.</span></li>
+      <li><b>Diff viewer</b><span>Inline side-by-side diffs of every file change the agent makes.</span></li>
+      <li><b>Tool call approval</b><span>Review and approve or reject tool calls before the agent executes them.</span></li>
+      <li><b>Biometric unlock</b><span>Face ID, Touch ID, or Android fingerprint protects the app and individual message sends.</span></li>
+      <li><b>Secure credential storage</b><span>Server credentials stored in the Android Keystore via expo-secure-store.</span></li>
+      <li><b>Session management</b><span>Browse, create, and resume coding sessions on your server.</span></li>
+    </ul>
+    <p style="margin-top:16px"><a href="features/">Full feature list and use cases →</a></p>
+    <p style="margin-top:8px">New here? See <a href="opencode-on-phone/">how to use OpenCode on your phone</a>. Comparing options? Read <a href="comparison/">OpenCode Mobile vs. ChatGPT &amp; Copilot</a>, <a href="vs-termux/">OpenCode Mobile vs. Termux</a>, or how to <a href="claude-code-android/">run Claude Code on Android</a>.</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>How to install</h2>
+    <h3>Option A — F-Droid (recommended)</h3>
+    <p>Add this repository in any F-Droid client (F-Droid, Droid-ify, Neo Store), then install OpenCode Mobile and get automatic updates:</p>
+    <pre><code>https://dzianisv.github.io/opencode-mobile/fdroid/repo</code></pre>
+    <p class="muted">In F-Droid: Settings &rarr; Repositories &rarr; add the URL above (or scan the QR code in the client's "Add repository" screen), then search for "OpenCode Mobile". Your client will ask you to confirm the repo on first connect.</p>
+    <p style="text-align:center;margin:20px 0">
+      <img src="fdroid-qr.png" alt="QR code to add the OpenCode Mobile F-Droid repository" width="180" height="180" style="background:#fff;padding:10px;border-radius:12px" loading="lazy" />
+      <br><span class="muted">Scan to add the F-Droid repo</span>
+    </p>
+
+    <h3>Option B — Direct APK</h3>
+    <p>Download the latest signed APK and install it (you may need to allow installation from unknown sources):</p>
+    <p><a class="btn btn-primary" href="https://github.com/dzianisv/opencode-mobile/releases/latest">Download latest APK</a></p>
+    <p style="text-align:center;margin:20px 0">
+      <img src="apk-qr.png" alt="QR code to download the OpenCode Mobile APK" width="180" height="180" style="background:#fff;padding:10px;border-radius:12px" loading="lazy" />
+      <br><span class="muted">Scan to download the APK on your phone</span>
+    </p>
+  </div>
+</section>
+
+<section id="requirements">
+  <div class="wrap">
+    <h2>Requirements</h2>
+    <div class="note">
+      <p><strong>You need your own OpenCode server.</strong> OpenCode Mobile is a client, not a hosted service. Before it is useful you must run an OpenCode server somewhere you control and make it reachable from your phone.</p>
+      <ol class="steps" style="margin-bottom:0">
+        <li>Install and run OpenCode on your machine:<br>
+          <pre style="margin-top:8px"><code>npm install -g opencode-ai
+OPENCODE_SERVER_PASSWORD=yourpassword opencode serve --hostname 0.0.0.0 --port 4096</code></pre>
+        </li>
+        <li>Make it reachable from your phone — the simplest secure option is <strong>Tailscale</strong> (connect to your machine's Tailscale IP, e.g. <code>http://100.x.x.x:4096</code>). A Cloudflare Tunnel, ngrok, or the same local network also work.</li>
+        <li>In the app, tap <strong>Add Connection</strong>, enter your server URL and password, and connect.</li>
+      </ol>
+    </div>
+    <p class="muted" style="margin-top:14px">You bring your own AI provider keys (OpenAI, Anthropic, Gemini, etc.) on the server — your keys, your bill.</p>
+    <p style="margin-top:14px">New to this? Follow the <a href="guide/">full step-by-step setup guide</a>.</p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Frequently asked questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Is it free?</summary>
+        <p>Yes. OpenCode Mobile is completely free and open source under the MIT license. There is no feature gate, no ads, and no analytics you did not opt into.</p>
+      </details>
+      <details>
+        <summary>Do I need my own server?</summary>
+        <p>Yes — it's a client, not a hosted service. You run an OpenCode server yourself with <code>opencode serve</code> on a machine you control (laptop, desktop, or VPS), and the app connects to it over the network.</p>
+      </details>
+      <details>
+        <summary>Is it on Google Play?</summary>
+        <p>Not publicly yet — Google Play is in internal testing only. You can install it on Android today via our <a href="https://dzianisv.github.io/opencode-mobile/fdroid/repo">F-Droid repo</a> or the <a href="https://github.com/dzianisv/opencode-mobile/releases/latest">direct signed APK</a>.</p>
+      </details>
+      <details>
+        <summary>Is there an iOS app?</summary>
+        <p>Not for download yet. The iPhone and iPad build is in active development, including native build CI and TestFlight automation. Follow the <a href="ios/">iOS / iPhone progress page</a>.</p>
+      </details>
+      <details>
+        <summary>Where do my API keys live?</summary>
+        <p>On your own OpenCode server. You bring your own AI provider keys (OpenAI, Anthropic, Gemini, etc.) and configure them on the server — your keys, your bill. The app never touches them and never proxies your code or conversations through anyone else's servers.</p>
+      </details>
+      <details>
+        <summary>How do I install it?</summary>
+        <p>Add the F-Droid repo <code>https://dzianisv.github.io/opencode-mobile/fdroid/repo</code> in any F-Droid client and install OpenCode Mobile, or download the latest signed APK from <a href="https://github.com/dzianisv/opencode-mobile/releases/latest">GitHub Releases</a>. See the <a href="guide/">setup guide</a> for the full walkthrough.</p>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="download/">Download</a>
+      <a href="guide/">Setup guide</a>
+      <a href="opencode-on-phone/">OpenCode on your phone</a>
+      <a href="remote-access/">Remote access</a>
+      <a href="ios/">iOS / iPhone</a>
+      <a href="features/">Features</a>
+      <a href="comparison/">Comparison</a>
+      <a href="vs-termux/">vs Termux</a>
+      <a href="claude-code-android/">Claude Code on Android</a>
+      <a href="troubleshooting/">Troubleshooting</a>
+      <a href="https://github.com/dzianisv/opencode-mobile">GitHub</a>
+      <a href="https://dzianisv.github.io/opencode-mobile/fdroid/repo">F-Droid repo</a>
+      <a href="https://dzianisv.github.io/opencode-mobile/privacy/">Privacy policy</a>
+      <a href="https://github.com/dzianisv/opencode-mobile/blob/main/LICENSE">MIT License</a>
+    </p>
+    <p class="muted">Free and open-source. Built by VIBE TECHNOLOGIES, LLC. Not affiliated with the OpenCode upstream project beyond using its open API.</p>
+  </div>
+</footer>
+
+</body>
+</html>

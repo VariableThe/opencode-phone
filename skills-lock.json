@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "android-keystore-generation": {
+      "source": "hitoshura25/claude-devtools",
+      "sourceType": "github",
+      "skillPath": "skills/android-keystore-generation/SKILL.md",
+      "computedHash": "15c6e1347dc19f0ffd75638619aeee25a9e8dc1e00839484a75ea31c4f1ad697"
+    },
+    "android-playstore-scan": {
+      "source": "hitoshura25/claude-devtools",
+      "sourceType": "github",
+      "skillPath": "skills/android-playstore-scan/SKILL.md",
+      "computedHash": "95fbe285b35302e69cd79669fa14ccdf35a69cf16474621cd0dd7ad066191609"
+    },
+    "android-playstore-setup": {
+      "source": "hitoshura25/claude-devtools",
+      "sourceType": "github",
+      "skillPath": "skills/android-playstore-setup/SKILL.md",
+      "computedHash": "6b5a88d34cf4fef6dc2d813eeb21f54ae84a4446a850745eaa29a5a1a9a4c6f8"
+    },
+    "android-service-account-guide": {
+      "source": "hitoshura25/claude-devtools",
+      "sourceType": "github",
+      "skillPath": "skills/android-service-account-guide/SKILL.md",
+      "computedHash": "8d2cc33e53db6815429c575fb6cf32ddb43781b422b51f135531275073b6ce10"
+    }
+  }
+}

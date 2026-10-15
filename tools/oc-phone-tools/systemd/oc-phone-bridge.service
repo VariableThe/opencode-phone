@@ -1,0 +1,24 @@
+[Unit]
+Description=oc-phone bridge for oc-phone (Tailnet only, :8787)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+# Mirrors the ntfy.service conventions: Tailnet-IP-only bind, journal logs,
+# Restart=on-failure. The Tailscale IPv4 is resolved at start time (every
+# start, including restarts) and exported as OC_BRIDGE_HOST, so a changed
+# Tailnet IP is picked up by `systemctl --user restart oc-phone-bridge`
+# with no unit edit needed. NOTE: ~/.config/oc-phone/env's OC_BRIDGE_HOST
+# line is then stale for oc-phone-qr — re-run scripts/setup-host.sh to
+# re-sync it (it updates just that line and says so).
+# Credentials come from the env file (bare KEY=value lines, no `export`).
+WorkingDirectory=%h/Projects/oc-phone-bridge
+EnvironmentFile=%h/.config/oc-phone/env
+Environment=PATH=%h/.local/bin:/usr/bin:/bin
+ExecStart=/bin/bash -c 'IP="$(tailscale ip -4 2>/dev/null | head -n1)"; [ -n "$IP" ] || { echo "oc-phone-bridge: no Tailscale IPv4 (is tailscaled up?)" >&2; exit 1; }; export OC_BRIDGE_HOST="$IP"; echo "oc-phone-bridge: binding ${IP}:${OC_BRIDGE_PORT:-8787}"; exec ./node_modules/.bin/tsx src/server.ts'
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

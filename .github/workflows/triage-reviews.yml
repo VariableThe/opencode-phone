@@ -1,0 +1,37 @@
+name: Play Store Review Triage
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 07:00 UTC daily (staggered after Daily Product Intelligence at 06:00 UTC)
+    - cron: "0 7 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: triage-reviews-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install google-auth google-auth-httplib2 google-api-python-client
+
+      - name: Triage Play Store reviews
+        env:
+          # Repo secret is named PLAY_STORE_SERVICE_ACCOUNT_JSON (see docs/playstore.md);
+          # mapped here to the env var name the script expects.
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: python scripts/triage-reviews.py

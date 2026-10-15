@@ -1,0 +1,12 @@
+{
+  "session_id": "69e7ce6b-bdc8-45b0-b7e4-9fef25893bf5",
+  "attempt": 1,
+  "timestamp": "2026-06-20T09:50:09.187Z",
+  "injected": true,
+  "status": "in_progress",
+  "confidence": 0.85,
+  "complete": false,
+  "severity": "HIGH",
+  "reason": "Missing required workflow steps",
+  "feedback_reason": "assessment_continue"
+}
