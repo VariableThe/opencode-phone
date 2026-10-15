@@ -41,11 +41,14 @@ export const categoryMeta: Record<Category, { labelKey: string; descriptionKey: 
   },
 }
 
-// Default state — permissions and questions on (they block work), the rest off
+// Default state — permissions, questions, completions, errors and connection
+// alerts on. Completion alerts are the point of backgrounding the app: the
+// user asked to be told when the agent finishes responding. (send() still
+// suppresses while the app is foregrounded — deliberate, see below.)
 export const defaultPreferences: Record<Category, boolean> = {
   permissions: true,
   questions: true,
-  completed: false,
+  completed: true,
   errors: true,
   connection: true,
 }

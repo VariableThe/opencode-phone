@@ -117,7 +117,7 @@
       },
       "foreground": {
         "label": "Persistent watcher (Android)",
-        "description": "Keep a foreground service polling every 60 seconds for timely alerts. Shows a permanent notification and uses more battery."
+        "description": "Check every ~1 minute instead of the ~15-minute background check above. Costs a permanent notification and more battery — but it is the only path that alerts after the app is swiped away."
       },
       "limits": "Background checks cannot reliably wake a killed app — reopen the app after Force stop. Only the persistent watcher delivers after the app is swiped away, and nothing resumes after a reboot until the app is opened again."
     }
@@ -386,7 +386,7 @@
       },
       "completed": {
         "label": "Task Completed",
-        "description": "When a session finishes processing"
+        "description": "When the agent finishes responding (only while the app is in the background — no alert while you're using it)"
       },
       "errors": {
         "label": "Errors",
