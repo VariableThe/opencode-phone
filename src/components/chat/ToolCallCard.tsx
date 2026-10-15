@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react"
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Platform } from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Part } from "../../lib/sdk"
@@ -338,12 +338,17 @@ export function ToolCallCard({ tool, isDark, palette, sessionID }: Props) {
         <SubagentBlock tool={tool} parentSessionID={sessionID} isDark={isDark} palette={c} />
       )}
 
-      {/* Expanded detail: indented dimmed block */}
+      {/* Expanded detail: indented dimmed block, laid out in the parent
+          list — never a nested scroll container. A vertical ScrollView here
+          used to chain leftover gestures into the inverted transcript list,
+          whose flipped transform then moved content opposite the finger
+          (scroll-down at the bottom scrolled the view upward). The per-detail
+          numberOfLines caps above stay as the bound on very long output. */}
       {expanded && (
-        <ScrollView style={s.detailScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+        <View style={s.detail}>
           {error && <ErrorBanner message={error} c={c} />}
           <ToolDetail tool={tool} c={c} isDark={isDark} />
-        </ScrollView>
+        </View>
       )}
     </View>
   )
@@ -379,8 +384,10 @@ const s = StyleSheet.create({
   },
   errorText: { fontSize: 12, fontFamily: mono, lineHeight: 18 },
 
-  // Detail: indented dimmed block under the header row
-  detailScroll: { maxHeight: 300, marginTop: 4, paddingLeft: 26 },
+  // Detail: indented dimmed block under the header row. Deliberately a
+  // plain View with no maxHeight: the parent transcript list owns the only
+  // vertical scroll gesture, so this content must lay out fully in place.
+  detail: { marginTop: 4, paddingLeft: 26 },
   detailSection: { gap: 4 },
   detailFile: {
     fontSize: 12,
