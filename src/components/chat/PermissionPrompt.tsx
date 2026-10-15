@@ -1,33 +1,56 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
-import { Ionicons } from "@expo/vector-icons"
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native"
 import { useTranslation } from "react-i18next"
+import { defaultPalette, type AppPalette } from "../../lib/opencode-theme"
+import { monoFont } from "./tui"
 
 interface Props {
   permission: { id: string; permission: string; patterns: string[] }
   isDark: boolean
+  palette?: AppPalette
   onReply: (reply: "once" | "always" | "reject") => void
 }
 
-export function PermissionPrompt({ permission, isDark, onReply }: Props) {
+// TUI-style permission prompt: flat full-width block with a 1px rule,
+// warning-tinted header, mono detail line, and flat bordered actions (44px
+// targets). Same reply wiring — only the chrome changed.
+export function PermissionPrompt({ permission, isDark, palette, onReply }: Props) {
   const { t } = useTranslation()
+  const c = palette ?? defaultPalette(isDark ? "dark" : "light")
+  const mono = monoFont(Platform.OS)
   return (
-    <View style={[s.card, isDark && s.cardDark]}>
+    <View style={[s.card, { backgroundColor: c.background, borderColor: c.warning }]}>
       <View style={s.header}>
-        <Ionicons name="shield-outline" size={18} color="#f59e0b" />
-        <Text style={[s.title, isDark && s.textWhite]}>{t("chat.permissionPrompt.title")}</Text>
+        <Text style={[s.marker, { fontFamily: mono, color: c.warning }]}>!</Text>
+        <Text style={[s.title, { fontFamily: mono, color: c.warning }]}>{t("chat.permissionPrompt.title")}</Text>
       </View>
-      <Text style={[s.type, isDark && s.typeDark]}>
+      <Text style={[s.type, { fontFamily: mono, color: c.text }]}>
         {permission.permission}: {permission.patterns.join(", ")}
       </Text>
       <View style={s.actions}>
-        <TouchableOpacity style={[s.btn, s.deny]} onPress={() => onReply("reject")}>
-          <Text style={s.denyText}>{t("chat.permissionPrompt.deny")}</Text>
+        <TouchableOpacity
+          style={[s.btn, { borderColor: c.error }]}
+          onPress={() => onReply("reject")}
+          accessibilityRole="button"
+        >
+          <Text style={[s.btnText, { fontFamily: mono, color: c.error }]}>{t("chat.permissionPrompt.deny")}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.btn, s.always, isDark && s.alwaysDark]} onPress={() => onReply("always")}>
-          <Text style={[s.alwaysText, isDark && s.textWhite]}>{t("chat.permissionPrompt.always")}</Text>
+        <TouchableOpacity
+          style={[s.btn, { borderColor: c.borderSubtle }]}
+          onPress={() => onReply("always")}
+          accessibilityRole="button"
+        >
+          <Text style={[s.btnText, { fontFamily: mono, color: c.muted }]}>
+            {t("chat.permissionPrompt.always")}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.btn, s.allow, isDark && s.allowDark]} onPress={() => onReply("once")}>
-          <Text style={[s.allowText, isDark && s.allowTextDark]}>{t("chat.permissionPrompt.allow")}</Text>
+        <TouchableOpacity
+          style={[s.btn, { borderColor: c.success }]}
+          onPress={() => onReply("once")}
+          accessibilityRole="button"
+        >
+          <Text style={[s.btnText, { fontFamily: mono, color: c.success }]}>
+            {t("chat.permissionPrompt.allow")}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -36,28 +59,19 @@ export function PermissionPrompt({ permission, isDark, onReply }: Props) {
 
 const s = StyleSheet.create({
   card: {
-    margin: 12,
-    padding: 16,
-    backgroundColor: "#fffbeb",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#fef3c7",
+    marginHorizontal: 0,
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingLeft: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
-  cardDark: { backgroundColor: "#1a1800", borderColor: "#333300" },
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  title: { fontSize: 15, fontWeight: "600", color: "#92400e" },
-  textWhite: { color: "#ffffff" },
-  type: { fontSize: 13, color: "#78350f", marginBottom: 12 },
-  typeDark: { color: "#d4a574" },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  marker: { fontSize: 14, fontWeight: "700" },
+  title: { fontSize: 13, fontWeight: "700" },
+  type: { fontSize: 13, lineHeight: 20, marginBottom: 10 },
   actions: { flexDirection: "row", gap: 8 },
-  btn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center" },
-  deny: { backgroundColor: "#fef2f2" },
-  denyText: { color: "#dc2626", fontWeight: "600", fontSize: 14 },
-  always: { backgroundColor: "#f5f5f5" },
-  alwaysDark: { backgroundColor: "#2a2a2a" },
-  alwaysText: { color: "#0a0a0a", fontWeight: "600", fontSize: 14 },
-  allow: { backgroundColor: "#0a0a0a" },
-  allowDark: { backgroundColor: "#ffffff" },
-  allowText: { color: "#ffffff", fontWeight: "600", fontSize: 14 },
-  allowTextDark: { color: "#0a0a0a" },
+  btn: { flex: 1, paddingVertical: 10, borderWidth: 1, alignItems: "center", minHeight: 44, justifyContent: "center" },
+  btnText: { fontWeight: "700", fontSize: 13 },
 })

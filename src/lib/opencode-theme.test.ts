@@ -126,3 +126,67 @@ test("resolveAppPalette: active with mapped tokens when toggle on and theme reso
   assert.equal(out.palette.background, "#1a1b26")
   assert.equal(out.palette.border, defaultPalette("dark").border)
 })
+
+
+test("full token set: all 50 KNOWN_TOKENS map onto the palette", async () => {
+  const mod = await import("./opencode-theme.ts")
+  assert.equal(mod.KNOWN_TOKENS.length, 50)
+  const toKey = (token: string) =>
+    token === "backgroundPanel" ? "panel"
+    : token === "backgroundElement" ? "element"
+    : token === "textMuted" ? "muted"
+    : token
+  const theme: Record<string, unknown> = { theme: {} }
+  const expected: Record<string, string> = {}
+  mod.KNOWN_TOKENS.forEach((token: string, i: number) => {
+    const hex = `#${((i * 1234567 + 0x334455) % 0xffffff).toString(16).padStart(6, "0")}`
+    ;(theme.theme as Record<string, unknown>)[token] = hex
+    expected[toKey(token)] = hex
+  })
+  const palette = mod.mapToPalette(theme, "dark") as Record<string, string>
+  // Guarded body-text roles may be contrast-adjusted (see contrast tests);
+  // every other token must land verbatim.
+  const guarded = new Set(["text", "muted", "markdownText", "markdownCodeBlock"])
+  for (const key of mod.PALETTE_KEYS as ReadonlyArray<string>) {
+    if (guarded.has(key)) continue
+    assert.equal(palette[key], expected[key], `palette.${key}`)
+  }
+  // And the guarded ones still resolved (not defaults) with readable contrast.
+  for (const [fg, bg] of [["text", "background"], ["muted", "background"]] as const) {
+    assert.ok(mod.contrastRatio(palette[fg], palette[bg]) >= 4.5, `${fg} vs ${bg}`)
+  }
+})
+
+test("unthemed defaults are tokyonight-derived, not device-scheme", async () => {
+  const mod = await import("./opencode-theme.ts")
+  assert.equal(mod.defaultPalette("dark").background, "#1a1b26")
+  assert.equal(mod.defaultPalette("dark").text, "#c8d3f5")
+  assert.equal(mod.defaultPalette("light").background, "#e1e2e7")
+  assert.equal(mod.defaultPalette("light").text, "#3760bf")
+  assert.equal(mod.defaultPalette("dark").diffAddedBg, "#20303b")
+  assert.equal(mod.defaultPalette("dark").syntaxKeyword, "#c099ff")
+})
+
+test("contrast guard: failing body text is nudged to WCAG AA, passing pairs untouched", async () => {
+  const mod = await import("./opencode-theme.ts")
+  assert.equal(mod.contrastRatio("#ffffff", "#000000"), 21)
+  assert.ok(mod.contrastRatio("#c8d3f5", "#1a1b26") >= 4.5)
+  // Low-contrast theme text on its background gets adjusted to readable.
+  const low = { theme: { background: "#1a1b26", text: "#222436", textMuted: "#222436" } }
+  const palette = mod.mapToPalette(low, "dark")
+  assert.ok(mod.contrastRatio(palette.text, palette.background) >= 4.5, "text adjusted")
+  assert.ok(mod.contrastRatio(palette.muted, palette.background) >= 4.5, "muted adjusted")
+  // A readable pair passes through byte-identical.
+  assert.equal(mod.ensureContrast("#c8d3f5", "#1a1b26"), "#c8d3f5")
+})
+
+test("syntaxColors exposes the highlighter roles from syntax tokens", async () => {
+  const mod = await import("./opencode-theme.ts")
+  const palette = mod.defaultPalette("dark")
+  const colors = mod.syntaxColors(palette)
+  assert.equal(colors.comment, palette.syntaxComment)
+  assert.equal(colors.keyword, palette.syntaxKeyword)
+  assert.equal(colors.string, palette.syntaxString)
+  assert.equal(colors.number, palette.syntaxNumber)
+  assert.equal(colors.base, palette.markdownCodeBlock)
+})

@@ -254,11 +254,13 @@ test("inbox enqueue resolves the optimistic temp message with a real user messag
       item: { type: "user", payload: { text: "hello", files: [{ data: "YWJj", mime: "image/png", name: "a.png" }] } },
     }),
   )
-  assert.deepEqual(out.map((e) => e.type), ["message.updated", "message.part.updated", "message.part.updated"])
+  assert.deepEqual(out.map((e) => e.type), ["message.updated", "message.part.updated", "message.part.updated", "inbox.enqueued"])
   const info = out[0].properties.info as { id: string; role: string }
   assert.deepEqual([info.id, info.role], ["msg_u1", "user"])
   const filePart = out[2].properties.part as { type: string; url?: string }
   assert.deepEqual([filePart.type, filePart.url], ["file", "data:image/png;base64,YWJj"])
+  const queueMark = out[3].properties as { sessionID: string; inboxID: string; text: string }
+  assert.deepEqual([queueMark.sessionID, queueMark.inboxID, queueMark.text], ["s1", "msg_u1", "hello"])
 })
 
 test("permission and form events feed the pending registry and the prompt UI shapes", () => {

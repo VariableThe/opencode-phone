@@ -1,5 +1,6 @@
 export { MessageBubble } from "./MessageBubble"
 export { ToolCallCard } from "./ToolCallCard"
+export { SubagentBlock } from "./SubagentBlock"
 export { DiffView } from "./DiffView"
 export { ReasoningBlock } from "./ReasoningBlock"
 export { PermissionPrompt } from "./PermissionPrompt"

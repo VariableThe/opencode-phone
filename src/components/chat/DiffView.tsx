@@ -1,33 +1,54 @@
 import { View, Text, StyleSheet, Platform } from "react-native"
 import { wideTextSelection } from "../../lib/scroll-config"
+import { defaultPalette, type AppPalette } from "../../lib/opencode-theme"
+import { monoFont } from "./tui"
 import { computeDiff } from "./diff-compute"
 
-const mono = Platform.OS === "ios" ? "Menlo" : "monospace"
+const mono = monoFont(Platform.OS)
 
 interface Props {
   before: string
   after: string
   isDark: boolean
+  palette?: AppPalette
 }
 
-export function DiffView({ before, after, isDark }: Props) {
+// TUI-style diff: +/-/context-prefixed lines painted with the theme's real
+// diff tokens (diffAdded/diffRemoved/diffContext for the glyph + text, the
+// *Bg variants for the row fill, diffLineNumber for the gutter) — not a
+// generic green/red. No truncation, no sideways scroll (issue #21): long
+// lines fold inside their row via flex:1.
+export function DiffView({ before, after, isDark, palette }: Props) {
   const lines = computeDiff(before, after)
   const sel = wideTextSelection(Platform.OS)
+  const c = palette ?? defaultPalette(isDark ? "dark" : "light")
 
   if (lines.length === 0) return null
 
   return (
-    <View style={[s.container, isDark && s.containerDark]} testID="diff-view">
+    <View style={[s.container, { backgroundColor: c.diffContextBg }]} testID="diff-view">
       {lines.map((line, idx) => (
         <View
           key={idx}
           style={[
             s.line,
-            line.type === "add" && (isDark ? s.addDark : s.add),
-            line.type === "remove" && (isDark ? s.removeDark : s.remove),
+            line.type === "add" && { backgroundColor: c.diffAddedBg },
+            line.type === "remove" && { backgroundColor: c.diffRemovedBg },
           ]}
         >
-          <Text style={[s.prefix, isDark && s.prefixDark]}>
+          <Text
+            style={[
+              s.prefix,
+              {
+                color:
+                  line.type === "add"
+                    ? c.diffAdded
+                    : line.type === "remove"
+                      ? c.diffRemoved
+                      : c.diffLineNumber,
+              },
+            ]}
+          >
             {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
           </Text>
           {/* s.text is flex:1 with no numberOfLines, so a long diff line folds
@@ -37,9 +58,14 @@ export function DiffView({ before, after, isDark }: Props) {
           <Text
             style={[
               s.text,
-              isDark && s.textDark,
-              line.type === "add" && s.addText,
-              line.type === "remove" && s.removeText,
+              {
+                color:
+                  line.type === "add"
+                    ? c.diffAdded
+                    : line.type === "remove"
+                      ? c.diffRemoved
+                      : c.diffContext,
+              },
             ]}
             selectable={sel.selectable}
           >
@@ -53,31 +79,22 @@ export function DiffView({ before, after, isDark }: Props) {
 
 const s = StyleSheet.create({
   container: {
-    borderRadius: 6,
-    overflow: "hidden",
-    backgroundColor: "#f8f8f8",
     marginTop: 6,
   },
-  containerDark: { backgroundColor: "#1a1a1a" },
 
   line: {
     flexDirection: "row",
     paddingHorizontal: 8,
     paddingVertical: 1,
   },
-  add: { backgroundColor: "#dcfce7" },
-  addDark: { backgroundColor: "#052e16" },
-  remove: { backgroundColor: "#fee2e2" },
-  removeDark: { backgroundColor: "#2a0a0a" },
 
   prefix: {
     width: 16,
     fontSize: 12,
     fontFamily: mono,
-    color: "#999999",
+    fontWeight: "700",
     lineHeight: 20,
   },
-  prefixDark: { color: "#666666" },
 
   text: {
     // flex:1 is what makes the fold happen inside the row instead of pushing the
@@ -85,10 +102,6 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: mono,
-    color: "#0a0a0a",
     lineHeight: 20,
   },
-  textDark: { color: "#e5e5e5" },
-  addText: { color: "#16a34a" },
-  removeText: { color: "#dc2626" },
 })

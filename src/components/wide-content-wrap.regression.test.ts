@@ -54,7 +54,10 @@ test("wide content wraps instead of scrolling sideways", () => {
 test("every logical line is rendered, so indentation and blank lines survive", () => {
   const codeBlock = readComponent("markdown/CodeBlock.tsx")
   assert.ok(codeBlock.includes('code.split("\\n")'), "CodeBlock must render one Text per logical line")
-  assert.ok(codeBlock.includes('line.length > 0 ? line : " "'), "CodeBlock must keep blank lines visible")
+  assert.ok(
+    codeBlock.includes("line.length > 0 ?") && codeBlock.includes(': " "'),
+    "CodeBlock must keep blank lines visible",
+  )
 
   const diffView = readComponent("chat/DiffView.tsx")
   assert.ok(diffView.includes('line.text.length > 0 ? line.text : " "'), "DiffView must keep blank diff lines visible")

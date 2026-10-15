@@ -268,11 +268,17 @@ function toolOutput(content: V2ToolContent[] | undefined): string | undefined {
 function mapToolState(state: V2ToolState | undefined): Part["state"] {
   if (!state) return { status: "pending" }
   const title = typeof state.metadata?.title === "string" ? (state.metadata.title as string) : undefined
+  // Subagent delegations resolve their child session id here on completion
+  // (live-verified on 2.0.29: metadata.sessionID appears with the terminal
+  // state, and is absent while running) — thread it through so the parent
+  // transcript can link the tool call to the child's live activity.
+  const childID = state.metadata?.sessionID
+  const subagentSessionID = typeof childID === "string" && childID.length > 0 ? childID : undefined
   if (state.status === "streaming" || state.status === "running") {
-    return { status: "running", input: state.input, title }
+    return { status: "running", input: state.input, title, subagentSessionID }
   }
   if (state.status === "completed") {
-    return { status: "completed", input: state.input, output: toolOutput(state.content), title }
+    return { status: "completed", input: state.input, output: toolOutput(state.content), title, subagentSessionID }
   }
   return {
     status: "error",
@@ -280,6 +286,7 @@ function mapToolState(state: V2ToolState | undefined): Part["state"] {
     output: toolOutput(state.content),
     title,
     error: { message: structuredErrorMessage(state.error) },
+    subagentSessionID,
   }
 }
 
@@ -587,7 +594,6 @@ export class V2EventTranslator {
     switch (raw.type) {
       case "server.connected":
       case "project.updated":
-      case "session.inbox.delivered":
       case "session.viewed":
       case "session.metadata.updated":
       case "session.model.selected":
@@ -741,13 +747,20 @@ export class V2EventTranslator {
         if (raw.type === "session.tool.input.delta") buf.input += String(d.delta ?? "")
         if (raw.type === "session.tool.input.ended" && d.text !== undefined) buf.input = String(d.text)
 
+        // Subagent delegations resolve their child session id in the tool
+        // metadata on completion (live-verified on 2.0.29) — thread it
+        // through so the parent transcript can link the tool call to the
+        // child's live activity (see subagent-link.ts).
+        const meta = d.metadata as Record<string, unknown> | undefined
+        const subagentSessionID =
+          typeof meta?.sessionID === "string" && meta.sessionID.length > 0 ? meta.sessionID : undefined
         let state: Part["state"]
         if (raw.type === "session.tool.success") {
-          state = { status: "completed", input: parsedToolInput(buf), output: toolOutput(d.content), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start, end: raw.created } }
+          state = { status: "completed", input: parsedToolInput(buf), output: toolOutput(d.content), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start, end: raw.created }, subagentSessionID }
         } else if (raw.type === "session.tool.failed") {
-          state = { status: "error", input: parsedToolInput(buf), output: toolOutput(d.content), error: { message: structuredErrorMessage(d.error) }, time: { start: buf.start, end: raw.created } }
+          state = { status: "error", input: parsedToolInput(buf), output: toolOutput(d.content), error: { message: structuredErrorMessage(d.error) }, time: { start: buf.start, end: raw.created }, subagentSessionID }
         } else {
-          state = { status: "running", input: raw.type === "session.tool.called" ? d.input : parsedToolInput(buf), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start } }
+          state = { status: "running", input: raw.type === "session.tool.called" ? d.input : parsedToolInput(buf), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start }, subagentSessionID }
         }
         if (raw.type === "session.tool.called") buf.start = buf.start ?? raw.created
         const part: Part = { id: `tool-${d.id}`, sessionID, messageID: d.assistantMessageID, type: "tool", tool: buf.name, callID: d.id, state }
@@ -759,6 +772,7 @@ export class V2EventTranslator {
         // so emitting it here resolves the app's optimistic `temp-` message.
         if (!sessionID || !d.inboxID) return []
         const item = d.item || {}
+        const payload = item.payload || item
         const info: Message = {
           id: d.inboxID,
           sessionID,
@@ -769,7 +783,21 @@ export class V2EventTranslator {
         for (const part of userParts(d.inboxID, item.payload || item)) {
           out.push(ev("message.part.updated", { part }))
         }
+        // Companion event so the chat store can track the pending queue
+        // separately from the transcript: delivered/cancelled remove the id.
+        const text = typeof payload.text === "string" ? payload.text : ""
+        out.push(ev("inbox.enqueued", { sessionID, inboxID: d.inboxID, text }))
         return out
+      }
+
+      case "session.inbox.delivered": {
+        if (!sessionID || !d.inboxID) return []
+        return [ev("inbox.delivered", { sessionID, inboxID: d.inboxID })]
+      }
+
+      case "session.inbox.delivery.changed": {
+        if (!sessionID || !d.inboxID) return []
+        return [ev("inbox.delivery.changed", { sessionID, inboxID: d.inboxID, delivery: d.delivery })]
       }
 
       case "session.inbox.cancelled":

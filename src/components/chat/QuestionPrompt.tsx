@@ -1,7 +1,8 @@
 import { useRef, useState } from "react"
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native"
-import { Ionicons } from "@expo/vector-icons"
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native"
 import { useTranslation } from "react-i18next"
+import { defaultPalette, type AppPalette } from "../../lib/opencode-theme"
+import { monoFont } from "./tui"
 
 interface QuestionOption {
   label: string
@@ -22,16 +23,22 @@ interface Props {
     questions: Question[]
   }
   isDark: boolean
+  palette?: AppPalette
   onReply: (answers: string[][]) => void
   onReject: () => void
 }
 
-export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
+// TUI-style question prompt: flat full-width block, mono text, options as
+// flat 1px rows with a `[x]`/`[ ]` text marker (selection never color-only),
+// primary-bordered submit. Reply/reject state machine untouched.
+export function QuestionPrompt({ request, isDark, palette, onReply, onReject }: Props) {
   const { t } = useTranslation()
   const [answers, setAnswers] = useState<string[][]>(request.questions.map(() => []))
   const [custom, setCustom] = useState("")
   const [showCustom, setShowCustom] = useState(false)
   const [current, setCurrent] = useState(0)
+  const c = palette ?? defaultPalette(isDark ? "dark" : "light")
+  const mono = monoFont(Platform.OS)
 
   // A question is answered exactly once. Without this guard, a double-tap on a
   // single-select option schedules two `onReply` timers; the second reply hits
@@ -81,12 +88,14 @@ export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
   }
 
   return (
-    <View style={[s.card, isDark && s.cardDark]}>
+    <View style={[s.card, { backgroundColor: c.background, borderColor: c.primary }]}>
       <View style={s.header}>
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#8b5cf6" />
-        <Text style={[s.title, isDark && s.textWhite]}>{q.header || t("chat.questionPrompt.headerFallback")}</Text>
+        <Text style={[s.marker, { fontFamily: mono, color: c.primary }]}>?</Text>
+        <Text style={[s.title, { fontFamily: mono, color: c.primary }]}>
+          {q.header || t("chat.questionPrompt.headerFallback")}
+        </Text>
       </View>
-      <Text style={[s.question, isDark && s.textWhite]}>{q.question}</Text>
+      <Text style={[s.question, { fontFamily: mono, color: c.text }]}>{q.question}</Text>
 
       <View style={s.options}>
         {q.options.map((opt) => {
@@ -94,16 +103,21 @@ export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
           return (
             <TouchableOpacity
               key={opt.label}
-              style={[
-                s.option,
-                isDark && s.optionDark,
-                selected && s.optionSelected,
-                selected && isDark && s.optionSelectedDark,
-              ]}
+              style={[s.option, { borderColor: selected ? c.primary : c.borderSubtle }]}
               onPress={() => toggleOption(opt.label)}
+              accessibilityRole="button"
             >
-              <Text style={[s.optionLabel, isDark && s.textWhite, selected && s.optionLabelSelected]}>{opt.label}</Text>
-              {opt.description ? <Text style={[s.optionDesc, isDark && s.metaDark]}>{opt.description}</Text> : null}
+              <Text style={[s.optionMarker, { fontFamily: mono, color: selected ? c.primary : c.muted }]}>
+                {selected ? "[x]" : "[ ]"}
+              </Text>
+              <View style={s.optionBody}>
+                <Text style={[s.optionLabel, { fontFamily: mono, color: selected ? c.primary : c.text }]}>
+                  {opt.label}
+                </Text>
+                {opt.description ? (
+                  <Text style={[s.optionDesc, { fontFamily: mono, color: c.muted }]}>{opt.description}</Text>
+                ) : null}
+              </View>
             </TouchableOpacity>
           )
         })}
@@ -112,32 +126,36 @@ export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
           (showCustom ? (
             <View style={s.customRow}>
               <TextInput
-                style={[s.customInput, isDark && s.customInputDark]}
+                style={[s.customInput, { fontFamily: mono, color: c.text, borderColor: c.borderSubtle }]}
                 placeholder={t("chat.questionPrompt.answerPlaceholder")}
-                placeholderTextColor={isDark ? "#666666" : "#999999"}
+                placeholderTextColor={c.muted}
                 value={custom}
                 onChangeText={setCustom}
                 onSubmitEditing={submitCustom}
                 autoFocus
               />
-              <TouchableOpacity onPress={submitCustom} style={s.customSubmit}>
-                <Ionicons name="send" size={18} color="#8b5cf6" />
+              <TouchableOpacity onPress={submitCustom} style={s.customSubmit} hitSlop={8}>
+                <Text style={[s.customSubmitLabel, { fontFamily: mono, color: c.primary }]}>
+                  {t("chat.questionPrompt.submit")}
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={[s.option, isDark && s.optionDark]} onPress={() => setShowCustom(true)}>
-              <Text style={[s.optionLabel, { color: "#8b5cf6" }]}>{t("chat.questionPrompt.customAnswerLabel")}</Text>
+            <TouchableOpacity style={[s.option, { borderColor: c.borderSubtle }]} onPress={() => setShowCustom(true)}>
+              <Text style={[s.optionLabel, { fontFamily: mono, color: c.primary }]}>
+                {t("chat.questionPrompt.customAnswerLabel")}
+              </Text>
             </TouchableOpacity>
           ))}
       </View>
 
       <View style={s.footer}>
-        <TouchableOpacity onPress={reject}>
-          <Text style={[s.dismiss, isDark && s.metaDark]}>{t("chat.questionPrompt.dismiss")}</Text>
+        <TouchableOpacity onPress={reject} hitSlop={8}>
+          <Text style={[s.dismiss, { fontFamily: mono, color: c.muted }]}>{t("chat.questionPrompt.dismiss")}</Text>
         </TouchableOpacity>
         {(request.questions.length > 1 || q.multiple) && (
           <TouchableOpacity
-            style={[s.submitBtn, isDark && s.submitBtnDark]}
+            style={[s.submitBtn, { borderColor: c.primary }]}
             onPress={() => {
               if (current < request.questions.length - 1) {
                 setCurrent(current + 1)
@@ -146,7 +164,7 @@ export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
               }
             }}
           >
-            <Text style={s.submitText}>
+            <Text style={[s.submitText, { fontFamily: mono, color: c.primary }]}>
               {current < request.questions.length - 1 ? t("chat.questionPrompt.next") : t("chat.questionPrompt.submit")}
             </Text>
           </TouchableOpacity>
@@ -158,53 +176,46 @@ export function QuestionPrompt({ request, isDark, onReply, onReject }: Props) {
 
 const s = StyleSheet.create({
   card: {
-    margin: 12,
-    padding: 16,
-    backgroundColor: "#f5f3ff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#ede9fe",
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingLeft: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
-  cardDark: { backgroundColor: "#1a1a2e", borderColor: "#2a2a3e" },
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  title: { fontSize: 15, fontWeight: "600", color: "#6d28d9" },
-  textWhite: { color: "#ffffff" },
-  question: { fontSize: 14, lineHeight: 20, color: "#0a0a0a", marginBottom: 12 },
-  metaDark: { color: "#666666" },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  marker: { fontSize: 14, fontWeight: "700" },
+  title: { fontSize: 13, fontWeight: "700" },
+  question: { fontSize: 14, lineHeight: 21, marginBottom: 10 },
 
-  options: { gap: 8 },
+  options: { gap: 6 },
   option: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#e5e5e5",
+    minHeight: 44,
   },
-  optionDark: { backgroundColor: "#2a2a2a", borderColor: "#3a3a3a" },
-  optionSelected: { borderColor: "#8b5cf6", backgroundColor: "#f5f3ff" },
-  optionSelectedDark: { borderColor: "#8b5cf6", backgroundColor: "#2a1a3e" },
-  optionLabel: { fontSize: 14, fontWeight: "600", color: "#0a0a0a" },
-  optionLabelSelected: { color: "#6d28d9" },
-  optionDesc: { fontSize: 12, color: "#666666", marginTop: 2 },
+  optionMarker: { fontSize: 13, fontWeight: "700", lineHeight: 20 },
+  optionBody: { flex: 1 },
+  optionLabel: { fontSize: 14, fontWeight: "600" },
+  optionDesc: { fontSize: 12, marginTop: 2, lineHeight: 18 },
 
-  customRow: { flexDirection: "row", gap: 8 },
+  customRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   customInput: {
     flex: 1,
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: "#e5e5e5",
-    color: "#0a0a0a",
   },
-  customInputDark: { backgroundColor: "#2a2a2a", borderColor: "#3a3a3a", color: "#ffffff" },
-  customSubmit: { justifyContent: "center", alignItems: "center", padding: 8 },
+  customSubmit: { justifyContent: "center", alignItems: "center", padding: 8, minHeight: 44, minWidth: 44 },
+  customSubmitLabel: { fontSize: 13, fontWeight: "700" },
 
-  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12 },
-  dismiss: { fontSize: 14, color: "#999999" },
-  submitBtn: { backgroundColor: "#8b5cf6", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  submitBtnDark: { backgroundColor: "#7c3aed" },
-  submitText: { color: "#ffffff", fontWeight: "600", fontSize: 14 },
+  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
+  dismiss: { fontSize: 13 },
+  submitBtn: { paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, minHeight: 44, justifyContent: "center" },
+  submitText: { fontWeight: "700", fontSize: 14 },
 })

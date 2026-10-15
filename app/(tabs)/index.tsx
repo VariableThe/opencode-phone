@@ -29,29 +29,34 @@ import { groupByDirectory } from "../../src/lib/session-grouping"
 import { UpdateBanner } from "../../src/components/UpdateBanner"
 import { useAppPalette } from "../../src/components/useAppPalette"
 import { nameOf } from "../../src/lib/path-utils"
+import { formatRelativeTime } from "../../src/lib/relative-time"
+import { useNow } from "../../src/lib/use-now"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
 import { filterModels } from "../../src/lib/model-filter"
 
-function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return t("sessionsList.time.justNow")
-  if (diff < 3600000) return t("sessionsList.time.minutesAgo", { count: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t("sessionsList.time.hoursAgo", { count: Math.floor(diff / 3600000) })
-  if (diff < 604800000) return t("sessionsList.time.daysAgo", { count: Math.floor(diff / 86400000) })
-
-  return date.toLocaleDateString()
+// Buckets from lib/relative-time.ts (unit-tested) rendered through this
+// screen's existing strings. `now` comes from a ticking useNow() clock owned
+// by SessionsScreen (one timer per screen, not per row) so labels advance
+// while the list is visible and refresh on focus.
+function formatTime(
+  timestamp: number,
+  now: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  return (
+    formatRelativeTime(timestamp, now, t, "sessionsList.time") ?? new Date(timestamp).toLocaleDateString()
+  )
 }
 
 function SessionItem({
   session,
+  now,
   isDark,
   onRename,
   onDelete,
 }: {
   session: Session
+  now: number
   isDark: boolean
   onRename: () => void
   onDelete: () => void
@@ -102,7 +107,7 @@ function SessionItem({
             numberOfLines={1}
             ellipsizeMode="tail"
           >
-            {formatTime(session.time.updated, t)}
+            {formatTime(session.time.updated, now, t)}
             {/* summary is always present but files defaults to 0 until the
                 server populates it — only show the count when it's meaningful,
                 matching the SessionInfo panel's `summary.files > 0` guard (#55) */}
@@ -238,6 +243,12 @@ export default function SessionsScreen() {
   // session, or to switch the active connection's directory.
   const [browseMode, setBrowseMode] = useState<"create" | "switch">("create")
   const [refreshing, setRefreshing] = useState(false)
+  // Single ticking clock for every relative label on this screen — minute
+  // granularity re-renders the list at most every 30s, ticks immediately on
+  // focus/foreground, and recomputes on every pull-to-refresh (refreshing is
+  // the manual-refresh key) so labels advance even when the fetched sessions
+  // come back unchanged and the store emits no update.
+  const now = useNow(refreshing)
   // Directories collapsed in the grouped session list. Empty by default —
   // all groups start expanded (#67).
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
@@ -679,6 +690,7 @@ export default function SessionsScreen() {
           ) : (
             <SessionItem
               session={row.session}
+              now={now}
               isDark={isDark}
               onRename={() => handleRename(row.session)}
               onDelete={() => handleDelete(row.session)}

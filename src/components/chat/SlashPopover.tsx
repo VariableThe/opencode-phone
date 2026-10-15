@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Keyboard, Platform } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
+import type { AppPalette } from "../../lib/opencode-theme"
 
 export interface SlashCommand {
   trigger: string
@@ -15,10 +16,11 @@ interface Props {
   query: string
   commands: SlashCommand[]
   isDark: boolean
+  palette?: AppPalette
   onSelect: (cmd: SlashCommand) => void
 }
 
-export function SlashPopover({ query, commands, isDark, onSelect }: Props) {
+export function SlashPopover({ query, commands, isDark, palette, onSelect }: Props) {
   const { t } = useTranslation()
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -28,26 +30,32 @@ export function SlashPopover({ query, commands, isDark, onSelect }: Props) {
   if (filtered.length === 0) return null
 
   return (
-    <View style={[s.popover, isDark && s.popoverDark]}>
+    <View
+      style={[
+        s.popover,
+        isDark && s.popoverDark,
+        palette && { backgroundColor: palette.background, borderTopColor: palette.borderSubtle },
+      ]}
+    >
       <ScrollView keyboardShouldPersistTaps="always" style={s.scroll}>
         {filtered.map((cmd) => (
           <TouchableOpacity key={cmd.trigger} style={[s.item, isDark && s.itemDark]} onPress={() => onSelect(cmd)}>
             <Ionicons
               name={cmd.icon as any}
               size={18}
-              color={cmd.type === "custom" ? "#8b5cf6" : isDark ? "#888888" : "#666666"}
+              color={cmd.type === "custom" ? palette?.accent ?? "#8b5cf6" : (palette?.muted ?? (isDark ? "#888888" : "#666666"))}
             />
             <View style={s.textCol}>
-              <Text style={[s.trigger, isDark && s.textWhite]}>/{cmd.trigger}</Text>
+              <Text style={[s.trigger, isDark && s.textWhite, palette && { color: palette.text }]}>/{cmd.trigger}</Text>
               {cmd.description && (
-                <Text style={[s.desc, isDark && s.metaDark]} numberOfLines={1}>
+                <Text style={[s.desc, isDark && s.metaDark, palette && { color: palette.muted }]} numberOfLines={1}>
                   {cmd.description}
                 </Text>
               )}
             </View>
             {cmd.type === "custom" && (
-              <View style={[s.badge, isDark && s.badgeDark]}>
-                <Text style={s.badgeText}>{t("chat.slashPopover.customBadge")}</Text>
+              <View style={[s.badge, isDark && s.badgeDark, palette && { backgroundColor: palette.element }]}>
+                <Text style={[s.badgeText, palette && { color: palette.accent }]}>{t("chat.slashPopover.customBadge")}</Text>
               </View>
             )}
           </TouchableOpacity>

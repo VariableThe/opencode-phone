@@ -26,6 +26,8 @@ import {
 } from "../../src/lib/notifications"
 import type { Category } from "../../src/lib/notifications"
 import { hasTelemetryConsent, setTelemetryConsent } from "../../src/lib/telemetry"
+import { formatRelativeTime } from "../../src/lib/relative-time"
+import { useNow } from "../../src/lib/use-now"
 import { PRIVACY_POLICY_URL } from "../../src/lib/links"
 import { CURRENT_VERSION, checkForUpdate, type AvailableUpdate } from "../../src/lib/update-check"
 import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
@@ -100,6 +102,9 @@ export default function SettingsScreen() {
   const { notifications, setNotification, locale, setLocale, ntfy, setNtfyEnabled, setNtfy, matchServerTheme, setMatchServerTheme, backgroundPoll, setBackgroundPoll, foregroundService, setForegroundService } =
     useSettings()
   const { running: ntfyRunning, lastError: ntfyError, lastReceived: ntfyLast, publishTest } = useNtfy()
+  // Ticking clock for the "last received" relative label below — without it
+  // the label is computed once and goes stale while Settings stays open.
+  const now = useNow()
   const [osGranted, setOsGranted] = useState<boolean | null>(null)
   const [telemetryUpdating, setTelemetryUpdating] = useState(false)
   const [testingNtfy, setTestingNtfy] = useState(false)
@@ -454,6 +459,9 @@ export default function SettingsScreen() {
           <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
             <Text style={[styles.settingDescription, { paddingLeft: 48 }, isDark && styles.metaDark, themed && { color: p.muted }]}>
               {t("settings.ntfy.lastReceived", { title: ntfyLast.title })}
+              {" · "}
+              {formatRelativeTime(ntfyLast.at, now, t, "sessionsList.time") ??
+                new Date(ntfyLast.at).toLocaleDateString()}
             </Text>
           </View>
         )}

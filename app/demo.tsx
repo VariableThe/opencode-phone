@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useColorScheme, Linking } from "react-native"
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native"
 import { Stack, useRouter } from "expo-router"
-import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import { MessageBubble, PermissionPrompt } from "../src/components/chat"
+import { useAppPalette } from "../src/components/useAppPalette"
+import { monoFont } from "../src/components/chat/tui"
 import { buildDemoScript, buildDemoCompletionMessage, buildDemoDenialMessage } from "../src/lib/demo-script"
 import { SETUP_GUIDE_URL } from "../src/lib/links"
 import { track, AnalyticsEvent } from "../src/lib/analytics"
@@ -23,8 +24,8 @@ import {
 // calls sessionClient.permission.reply the way app/session/[id].tsx does.
 export default function DemoScreen() {
   const router = useRouter()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  const { isDark, palette: p } = useAppPalette()
+  const mono = monoFont(Platform.OS)
   const { t } = useTranslation()
 
   // Built once per mount from pure, hardcoded data (src/lib/demo-script.ts).
@@ -59,45 +60,56 @@ export default function DemoScreen() {
   return (
     <>
       <Stack.Screen options={{ title: t("demo.title"), presentation: "card" }} />
-      <View style={[s.container, isDark && s.containerDark]} testID="demo-screen">
-        <View style={[s.banner, isDark && s.bannerDark]} testID="demo-banner">
-          <Ionicons name="play-circle-outline" size={16} color="#8b5cf6" />
-          <Text style={s.bannerText}>{t("demo.banner")}</Text>
+      <View style={[s.container, { backgroundColor: p.background }]} testID="demo-screen">
+        <View style={[s.banner, { borderBottomColor: p.borderSubtle }]} testID="demo-banner">
+          <Text style={[s.bannerMark, { fontFamily: mono, color: p.primary }]}>{">"}</Text>
+          <Text style={[s.bannerText, { fontFamily: mono, color: p.muted }]}>{t("demo.banner")}</Text>
         </View>
 
         <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
-          <MessageBubble message={userMessage} parts={script.parts[userMessage.id] || []} isDark={isDark} />
-          <MessageBubble message={assistantMessage} parts={script.parts[assistantMessage.id] || []} isDark={isDark} />
+          <MessageBubble message={userMessage} parts={script.parts[userMessage.id] || []} isDark={isDark} palette={p} />
+          <MessageBubble
+            message={assistantMessage}
+            parts={script.parts[assistantMessage.id] || []}
+            isDark={isDark}
+            palette={p}
+          />
 
-          {!reply && <PermissionPrompt permission={script.permission} isDark={isDark} onReply={handleReply} />}
+          {!reply && <PermissionPrompt permission={script.permission} isDark={isDark} palette={p} onReply={handleReply} />}
 
           {completion && (
-            <MessageBubble message={completion.message} parts={completion.parts} isDark={isDark} />
+            <MessageBubble message={completion.message} parts={completion.parts} isDark={isDark} palette={p} />
           )}
 
-          <View style={[s.ctaCard, isDark && s.ctaCardDark]} testID="demo-cta-card">
-            <Text style={[s.ctaTitle, isDark && s.textWhite]}>{t("demo.ctaTitle")}</Text>
-            <Text style={[s.ctaSubtitle, isDark && s.metaDark]}>{t("demo.ctaSubtitle")}</Text>
+          <View style={[s.ctaCard, { borderTopColor: p.borderSubtle }]} testID="demo-cta-card">
+            <Text style={[s.ctaTitle, { fontFamily: mono, color: p.text }]}>{t("demo.ctaTitle")}</Text>
+            <Text style={[s.ctaSubtitle, { fontFamily: mono, color: p.muted }]}>{t("demo.ctaSubtitle")}</Text>
             <TouchableOpacity
-              style={s.connectButton}
+              style={[s.connectButton, { borderColor: p.primary }]}
               onPress={handleConnectPress}
               testID="demo-connect-button"
             >
-              <Text style={s.connectButtonText}>{t("demo.connectButton")}</Text>
+              <Text style={[s.connectButtonText, { fontFamily: mono, color: p.primary }]}>
+                {t("demo.connectButton")}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={s.hostedCtaLink}
               onPress={handleConnectPress}
               testID="demo-hosted-cta"
             >
-              <Text style={s.hostedCtaLinkText}>{t("demo.hostedCtaLink")}</Text>
+              <Text style={[s.hostedCtaLinkText, { fontFamily: mono, color: p.primary }]}>
+                {t("demo.hostedCtaLink")}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={s.setupGuideLink}
               onPress={() => Linking.openURL(SETUP_GUIDE_URL)}
               testID="demo-setup-guide-link"
             >
-              <Text style={s.setupGuideLinkText}>{t("demo.setupGuideLink")}</Text>
+              <Text style={[s.setupGuideLinkText, { fontFamily: mono, color: p.muted }]}>
+                {t("demo.setupGuideLink")}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -107,48 +119,45 @@ export default function DemoScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
-  containerDark: { backgroundColor: "#0a0a0a" },
-  textWhite: { color: "#ffffff" },
-  metaDark: { color: "#888888" },
+  container: { flex: 1 },
 
   banner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#f5f3ff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e9d5ff",
   },
-  bannerDark: { backgroundColor: "#1a1030", borderBottomColor: "#2a1a4a" },
-  bannerText: { fontSize: 13, fontWeight: "600", color: "#6d28d9", flex: 1 },
+  bannerMark: { fontSize: 14, fontWeight: "700" },
+  bannerText: { fontSize: 13, fontWeight: "400", flex: 1 },
 
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContent: { paddingBottom: 40 },
 
+  // Flat TUI block: thin top rule, mono, left-aligned — no card, no rounding,
+  // no centred hero type. The button keeps a centred label (it is a control,
+  // not copy) but stretches full-width like a command row.
   ctaCard: {
     marginTop: 8,
     padding: 20,
-    borderRadius: 16,
-    backgroundColor: "#f5f5f5",
-    alignItems: "center",
+    borderTopWidth: 1,
+    alignItems: "stretch",
   },
-  ctaCardDark: { backgroundColor: "#1a1a1a" },
-  ctaTitle: { fontSize: 17, fontWeight: "700", color: "#0a0a0a", textAlign: "center" },
-  ctaSubtitle: { fontSize: 13, color: "#666666", marginTop: 6, textAlign: "center", lineHeight: 18 },
+  ctaTitle: { fontSize: 14, fontWeight: "600", textAlign: "left" },
+  ctaSubtitle: { fontSize: 13, marginTop: 6, textAlign: "left", lineHeight: 18 },
   connectButton: {
     marginTop: 16,
-    backgroundColor: "#0a0a0a",
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 44,
     width: "100%",
     alignItems: "center",
+    justifyContent: "center",
   },
-  connectButtonText: { color: "#ffffff", fontWeight: "600", fontSize: 15 },
-  hostedCtaLink: { marginTop: 14 },
-  hostedCtaLinkText: { fontSize: 14, fontWeight: "600", color: "#8b5cf6", textAlign: "center" },
-  setupGuideLink: { marginTop: 14 },
-  setupGuideLinkText: { fontSize: 14, fontWeight: "600", color: "#6366f1" },
+  connectButtonText: { fontWeight: "700", fontSize: 14 },
+  hostedCtaLink: { marginTop: 14, minHeight: 44, justifyContent: "center" },
+  hostedCtaLinkText: { fontSize: 14, fontWeight: "600", textAlign: "center" },
+  setupGuideLink: { marginTop: 6, minHeight: 44, justifyContent: "center" },
+  setupGuideLinkText: { fontSize: 14, fontWeight: "600", textAlign: "center" },
 })

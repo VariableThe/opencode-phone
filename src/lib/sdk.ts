@@ -158,6 +158,10 @@ export interface Part {
     title?: string
     error?: { message: string }
     time?: { start?: number; end?: number }
+    // v2 subagent/task delegations only: the child session id, present in
+    // the server's tool metadata once the run resolves (live-verified on
+    // 2.0.29 — absent/empty while the delegation is still running).
+    subagentSessionID?: string
   }
   // Timing
   time?: { start?: number; end?: number }
@@ -668,11 +672,18 @@ function createV2Client(config: ClientConfig) {
         return toMessageWithParts(all).reverse()
       },
 
-      // Sends a message and returns the response
+      // Sends a message and returns the created user-message id (which doubles
+      // as the inbox id when the send lands queued — verified live on 2.0.29).
       // Fire-and-forget async prompt - SSE events drive all real-time updates.
       // v2 model/agent selection is session state, applied before the prompt;
       // a staged revert (from "edit message") is committed automatically by the
       // next prompt (verified live), so no explicit commit call is needed.
+      // `delivery` selects server behaviour while the session is busy (both
+      // modes append to the inbox, GET .../inbox, with the receipt echoing the
+      // mode — verified live on 2.0.29): "queue" waits for the next turn,
+      // "steer" redirects the current turn. An idle send omits the flag and
+      // the server defaults it to "steer" (immediate). Omit it on idle
+      // sessions and v1 servers.
       prompt: async (
         sessionID: string,
         params: {
@@ -680,8 +691,9 @@ function createV2Client(config: ClientConfig) {
           model?: { providerID: string; modelID: string }
           agent?: string
           variant?: string
+          delivery?: "steer" | "queue"
         },
-      ): Promise<void> => {
+      ): Promise<{ messageID?: string }> => {
         if (params.model) {
           await request<void>(config, `/api/session/${sessionID}/model`, {
             method: "POST",
@@ -707,10 +719,11 @@ function createV2Client(config: ClientConfig) {
         const files = params.parts
           .filter((p): p is { type: "file"; mime: string; url: string; filename?: string } => p.type === "file")
           .map((p) => ({ uri: p.url, ...(p.filename ? { name: p.filename } : {}) }))
-        await request(config, `/api/session/${sessionID}/prompt`, {
+        const body = await request<{ data?: { id?: string } }>(config, `/api/session/${sessionID}/prompt`, {
           method: "POST",
-          body: JSON.stringify({ text, files }),
+          body: JSON.stringify({ text, files, ...(params.delivery ? { delivery: params.delivery } : {}) }),
         })
+        return { messageID: body?.data?.id }
       },
 
       command: async (
@@ -733,6 +746,30 @@ function createV2Client(config: ClientConfig) {
           }),
         })
       },
+
+      // Queued-message inbox (v2 only — v1 servers have no inbox API and the
+      // v1 client does not implement these; callers must guard). Entries are
+      // pending follow-ups the server holds while the session is busy.
+      inbox: async (sessionID: string): Promise<Array<{ id: string; text: string; delivery: string }>> => {
+        const body = await request<{
+          data: Array<{ id: string; payload?: { text?: string }; delivery?: string }>
+        }>(config, `/api/session/${sessionID}/inbox`)
+        return (body.data || []).map((e) => ({ id: e.id, text: e.payload?.text ?? "", delivery: e.delivery ?? "" }))
+      },
+
+      // Cancel a queued message. 204 on success; throws ApiError otherwise.
+      cancelInbox: (sessionID: string, inboxID: string) =>
+        request<void>(config, `/api/session/${sessionID}/inbox/${inboxID}`, { method: "DELETE" }),
+
+      // Switch a queued entry between "queue" and "steer". Note the server
+      // only moves the delivery mode — it cannot edit the queued text
+      // (PATCH without a delivery key 400s, verified live on 2.0.29), so
+      // editing a queued message is cancel-and-resend.
+      setInboxDelivery: (sessionID: string, inboxID: string, delivery: "steer" | "queue") =>
+        request<void>(config, `/api/session/${sessionID}/inbox/${inboxID}`, {
+          method: "PATCH",
+          body: JSON.stringify({ delivery }),
+        }),
 
       // v2 replaces abort with interrupt (POST returns {interrupted}).
       abort: async (sessionID: string): Promise<boolean> => {

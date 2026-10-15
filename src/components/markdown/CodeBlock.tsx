@@ -1,17 +1,24 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Platform } from "react-native"
 import * as Clipboard from "expo-clipboard"
 import { wideTextSelection } from "../../lib/scroll-config"
+import { defaultPalette, syntaxColors, type AppPalette } from "../../lib/opencode-theme"
+import { highlightLine, type HighlightKind } from "../../lib/syntax-highlight"
+import { monoFont } from "../chat/tui"
 
 interface Props {
   code: string
   language?: string
+  palette?: AppPalette
 }
 
-export function CodeBlock({ code, language }: Props) {
-  const isDark = useColorScheme() === "dark"
+export function CodeBlock({ code, language, palette }: Props) {
+  const scheme = useColorScheme()
+  const isDark = scheme === "dark"
   const [copied, setCopied] = useState(false)
   const sel = wideTextSelection(Platform.OS)
+  const c = palette ?? defaultPalette(isDark ? "dark" : "light")
+  const mono = monoFont(Platform.OS)
 
   // Cosmetic wrapping: one Text per logical line, so indentation survives and a
   // long line folds inside the block instead of needing sideways scrolling.
@@ -20,6 +27,19 @@ export function CodeBlock({ code, language }: Props) {
   // exists in the rendering. See ../../lib/scroll-config for why these blocks no
   // longer scroll horizontally.
   const lines = code.split("\n")
+
+  // TUI-style highlighting: the theme's syntax* tokens color strings,
+  // comments, numbers, and keywords per line. Single-line tokenizer only —
+  // anything it doesn't model stays in the base code color, never dropped.
+  const colors = syntaxColors(c)
+  const colorFor = (kind: HighlightKind): string => {
+    if (kind === "comment") return colors.comment
+    if (kind === "keyword") return colors.keyword
+    if (kind === "string") return colors.string
+    if (kind === "number") return colors.number
+    return colors.base
+  }
+  const highlighted = useMemo(() => lines.map((line) => highlightLine(line)), [code])
 
   const copy = async () => {
     try {
@@ -30,19 +50,23 @@ export function CodeBlock({ code, language }: Props) {
   }
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      <View style={[styles.header, isDark && styles.headerDark]}>
-        <Text style={[styles.language, isDark && styles.languageDark]}>{language || "code"}</Text>
+    <View style={[styles.container, { backgroundColor: c.panel, borderColor: c.borderSubtle }]}>
+      <View style={[styles.header, { borderBottomColor: c.borderSubtle }]}>
+        <Text style={[styles.language, { fontFamily: mono, color: c.muted }]}>{language || "code"}</Text>
         <TouchableOpacity onPress={copy} hitSlop={8}>
-          <Text style={[styles.copyBtn, isDark && styles.copyBtnDark]}>{copied ? "Copied!" : "Copy"}</Text>
+          <Text style={[styles.copyBtn, { fontFamily: mono, color: c.primary }]}>{copied ? "Copied!" : "Copy"}</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.codeBody} testID="code-block-body">
         {lines.map((line, idx) => (
           // An empty Text collapses to zero height, which would eat blank lines
           // and make pasted-vs-displayed line counts disagree.
-          <Text key={idx} style={[styles.code, isDark && styles.codeDark]} selectable={sel.selectable}>
-            {line.length > 0 ? line : " "}
+          <Text key={idx} style={[styles.code, { fontFamily: mono, color: colors.base }]} selectable={sel.selectable}>
+            {line.length > 0 ? highlighted[idx].map((seg, j) => (
+              <Text key={j} style={{ color: colorFor(seg.kind) }}>
+                {seg.text}
+              </Text>
+            )) : " "}
           </Text>
         ))}
       </View>
@@ -52,13 +76,8 @@ export function CodeBlock({ code, language }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 8,
     marginVertical: 8,
-    overflow: "hidden",
-  },
-  containerDark: {
-    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
   },
   header: {
     flexDirection: "row",
@@ -66,38 +85,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "#e8e8e8",
-  },
-  headerDark: {
-    backgroundColor: "#2a2a2a",
+    borderBottomWidth: 1,
   },
   language: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#666666",
     textTransform: "uppercase",
-  },
-  languageDark: {
-    color: "#888888",
   },
   copyBtn: {
     fontSize: 11,
-    color: "#8b5cf6",
     fontWeight: "600",
-  },
-  copyBtnDark: {
-    color: "#a78bfa",
   },
   codeBody: {
     padding: 12,
   },
   code: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 13,
     lineHeight: 20,
-    color: "#1a1a1a",
-  },
-  codeDark: {
-    color: "#e5e5e5",
   },
 })

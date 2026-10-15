@@ -11,6 +11,7 @@ import {
   Alert,
 } from "react-native"
 import { useAppPalette } from "../../src/components/useAppPalette"
+import { GUTTER_USER, monoFont } from "../../src/components/chat/tui"
 import { useLocalSearchParams, Stack, useRouter, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -42,11 +43,13 @@ import {
 } from "../../src/components/chat"
 import { useSessions } from "../../src/stores/sessions"
 import { useEvents, refreshPending } from "../../src/stores/events"
+import { useSubagents } from "../../src/stores/subagents"
 import { useConnections } from "../../src/stores/connections"
 import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
 import { messagePartsToSelectableText } from "../../src/lib/message-text"
+import { mergeCommandList, resolveSlash } from "../../src/lib/composer-queue"
 
 // --- Builtin slash commands ---
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -82,9 +85,11 @@ function getShortDir(dir?: string): string | null {
 export default function SessionScreen() {
   const { id, directory } = useLocalSearchParams<{ id: string; directory?: string }>()
   const router = useRouter()
-  // Server-theme colors for the screen chrome (container, toolbar, composer).
-  // Message bubbles/prompts keep the device scheme — see report.
+  // Server-theme colors for the whole screen: the TUI transcript style is the
+  // design for everyone, painted from the palette (server theme when the
+  // toggle matches, tokyonight-derived built-ins otherwise).
   const { isDark, palette: p, themed } = useAppPalette()
+  const mono = monoFont(Platform.OS)
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
 
@@ -112,10 +117,21 @@ export default function SessionScreen() {
     loadOlderMessages,
     revertToMessage,
     unrevertSession,
+    cancelQueued,
   } = useSessions()
 
   // Derive sending state for this specific session
   const isSending = useSessions((s) => !!(currentSession && s.sending[currentSession.id]))
+  // Session busy (SSE truth) drives queue delivery; v1 servers have no inbox
+  // API so they always send immediately.
+  const isBusy = useEvents((s) => (currentSession ? s.sessionStatus[currentSession.id]?.type === "busy" : false))
+  const isV1 = useConnections((s) => s.activeConnection?.api === "v1")
+  // Queued (accepted, not yet delivered) inbox ids for this session.
+  const queuedBySession = useSessions((s) => s.queued)
+  const queuedSet = useMemo(
+    () => new Set(currentSession ? queuedBySession[currentSession.id] || [] : []),
+    [queuedBySession, currentSession],
+  )
 
   const { authenticateForMessage } = useAuth()
   const { client, clientForDirectory } = useConnections()
@@ -167,10 +183,14 @@ export default function SessionScreen() {
     Alert.alert(t("session.alerts.speechErrorTitle"), t("session.alerts.speechErrorMessage"))
   }, [speech.error, t])
 
-  // Slash command state
-  const slashActive = input.startsWith("/") && !input.includes(" ")
-  const slashQuery = slashActive ? input.slice(1) : ""
+  // Slash command state. The popover stays open while the user types arguments
+  // after the command name — filtering always runs on the first token only.
+  const firstToken = input.startsWith("/") ? input.split(" ")[0] : ""
+  const slashActive = input.startsWith("/") && !input.includes("\n")
+  const slashQuery = slashActive ? firstToken.slice(1) : ""
 
+  // Local builtins shadow same-named server commands (see composer-queue.ts
+  // for the precedence rule) — builtins sort first, collisions dropped.
   const allCommands = useMemo<SlashCommand[]>(() => {
     const custom: SlashCommand[] = serverCommands.map((cmd) => ({
       trigger: cmd.name,
@@ -179,7 +199,7 @@ export default function SessionScreen() {
       icon: "code-slash-outline",
       type: "custom",
     }))
-    return [...custom, ...BUILTIN_COMMANDS]
+    return mergeCommandList(BUILTIN_COMMANDS, custom)
   }, [serverCommands])
 
   // While a revert is pending, the reverted message and everything after it
@@ -302,13 +322,23 @@ export default function SessionScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!id) return
+      let cancelled = false
       selectSession(id, directory).then(() => {
         // Re-fetch pending permissions/questions from the server to recover from
         // missed SSE events or failed optimistic removals
         const connState = useConnections.getState()
         const c = directory ? (connState.clientForDirectory(directory) ?? connState.client) : connState.client
-        if (c) refreshPending(c, id)
+        if (!c) return
+        refreshPending(c, id)
+        // Discover child (subagent) sessions so their live activity renders
+        // nested under the delegating tool call — and their past work survives
+        // a reload via the same fetch. Untracked on blur below.
+        if (!cancelled) void useSubagents.getState().trackParent(id, c)
       })
+      return () => {
+        cancelled = true
+        useSubagents.getState().untrackParent(id)
+      }
     }, [id, directory]),
   )
 
@@ -333,26 +363,38 @@ export default function SessionScreen() {
   }, [currentSession?.id])
 
   // Slash command handler
+  // Local builtin actions shared by popover selection and by sending a
+  // builtin line (`/model`, ...) directly.
+  const runBuiltin = useCallback(
+    (trigger: string) => {
+      switch (trigger) {
+        case "new":
+          router.back()
+          return
+        case "model":
+          setInput("")
+          modelSheetRef.current?.expand()
+          return
+        case "agent":
+          setInput("")
+          cycleAgent()
+          return
+      }
+    },
+    [router, cycleAgent],
+  )
+
   const handleSlashSelect = useCallback(
     (cmd: SlashCommand) => {
       if (cmd.type === "builtin") {
-        switch (cmd.trigger) {
-          case "new":
-            router.back()
-            return
-          case "model":
-            setInput("")
-            modelSheetRef.current?.expand()
-            return
-          case "agent":
-            setInput("")
-            cycleAgent()
-            return
-        }
+        runBuiltin(cmd.trigger)
+        return
       }
-      setInput(`/${cmd.trigger} `)
+      // Server command: swap the name token, keep any arguments already typed.
+      const rest = input.startsWith("/") ? input.slice(firstToken.length) : ""
+      setInput(`/${cmd.trigger}${rest.startsWith(" ") || rest === "" ? rest : ` ${rest}`}`)
     },
-    [router, cycleAgent],
+    [runBuiltin, input, firstToken],
   )
 
   // --- Image picking ---
@@ -457,31 +499,64 @@ export default function SessionScreen() {
 
     const text = input.trim()
     const files = [...attachments]
-    setInput("")
-    setAttachments([])
 
-    // Server slash commands (no attachments for commands)
+    // Slash lines never send as literal chat text. Bare "/" names nothing,
+    // builtins run locally (shadowing same-named server commands), server
+    // commands POST to the session command route with their argument text,
+    // and anything else gets a truthful unknown-command message.
     if (text.startsWith("/") && files.length === 0) {
-      const [cmdName, ...args] = text.split(" ")
-      const name = cmdName.slice(1)
-      const match = serverCommands.find((c) => c.name === name)
-      if (match && sessionClient && currentSession) {
-        sessionClient.session
-          .command(currentSession.id, {
-            command: name,
-            arguments: args.join(" "),
+      const resolution = resolveSlash(
+        text,
+        BUILTIN_COMMANDS.map((c) => c.trigger),
+        serverCommands.map((c) => c.name),
+      )
+      if (resolution.kind === "bare") {
+        Alert.alert(t("session.alerts.bareCommandTitle"), t("session.alerts.bareCommandMessage"))
+        return
+      }
+      if (resolution.kind === "builtin") {
+        setInput("")
+        runBuiltin(resolution.name)
+        return
+      }
+      if (resolution.kind === "server") {
+        if (!sessionClient || !currentSession) return
+        const target = currentSession
+        setInput("")
+        setAttachments([])
+        const failure: unknown = await sessionClient.session
+          .command(target.id, {
+            command: resolution.name,
+            arguments: resolution.args,
             agent,
             model: model ? `${model.providerID}/${model.modelID}` : undefined,
           })
-          .catch((err) => console.error("Command failed:", err))
+          .then(
+            () => null,
+            (err) => err,
+          )
+        if (failure) {
+          const detail = failure instanceof Error ? failure.message : String(failure)
+          Alert.alert(
+            t("session.alerts.commandFailedTitle"),
+            t("session.alerts.commandFailedMessage", { name: resolution.name, detail }),
+          )
+        }
         return
       }
+      Alert.alert(t("session.alerts.unknownCommandTitle"), t("session.alerts.unknownCommandMessage", { name: resolution.name }))
+      return
     }
 
-    // Messages are queued server-side when the session is busy.
-    // No need to abort - just send and it will be processed after current response.
+    // A busy session must not swallow the follow-up or blow away the running
+    // turn: `delivery: "queue"` parks it in the server inbox (shown pending
+    // until `inbox.delivered`). Idle sends go immediately with no delivery
+    // flag, and v1 connections always send immediately (no inbox API).
+    const delivery = isBusy && !isV1 ? ("queue" as const) : undefined
+    setInput("")
+    setAttachments([])
     try {
-      await sendMessage(text, model || undefined, agent || undefined, files, variant || undefined)
+      await sendMessage(text, model || undefined, agent || undefined, files, variant || undefined, delivery)
     } catch (err) {
       console.error("Send failed:", err)
       // Restore the user's text and attachments so their input isn't lost.
@@ -490,6 +565,69 @@ export default function SessionScreen() {
       Alert.alert(t("session.alerts.sendFailedTitle"), t("session.alerts.sendFailedMessage"))
     }
   }
+
+  // Cancel a queued message (DELETE .../inbox/{id}); the bubble is already
+  // gone optimistically, so a failure restores it and says so.
+  const handleCancelQueued = useCallback(
+    async (messageID: string) => {
+      const result = await cancelQueued(messageID)
+      if (!result.ok) {
+        Alert.alert(t("session.alerts.queueCancelFailedTitle"), t("session.alerts.queueCancelFailedMessage"))
+      }
+    },
+    [cancelQueued, t],
+  )
+
+  // Editing a queued message is cancel-and-resend: the server cannot edit
+  // queued text (PATCH only moves the delivery mode), so drop the queued
+  // entry and prefill the composer with its text.
+  const handleQueuedEdit = useCallback(
+    async (messageID: string) => {
+      const messageParts = useSessions.getState().parts[messageID] || []
+      const queuedText = messageParts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text || "")
+        .join("\n")
+      const doResend = async () => {
+        const result = await useSessions.getState().cancelQueued(messageID)
+        if (!result.ok) {
+          Alert.alert(t("session.alerts.queueCancelFailedTitle"), t("session.alerts.queueCancelFailedMessage"))
+          return
+        }
+        setInput(queuedText)
+      }
+      if (inputRef.current.trim()) {
+        Alert.alert(
+          t("session.alerts.replaceDraftTitle"),
+          t("session.alerts.replaceDraftMessage"),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("session.actions.replace"), style: "destructive", onPress: doResend },
+          ],
+          { cancelable: false },
+        )
+        return
+      }
+      void doResend()
+    },
+    [t],
+  )
+
+  // One stable edit entry point for bubbles: queued items cancel-and-resend,
+  // committed messages run the revert flow. Reads the queue from the store
+  // directly so MessageBubble's memo comparator stays effective.
+  const handleBubbleEdit = useCallback(
+    (messageID: string) => {
+      const state = useSessions.getState()
+      const ids = state.currentSession ? state.queued[state.currentSession.id] || [] : []
+      if (ids.includes(messageID)) {
+        void handleQueuedEdit(messageID)
+        return
+      }
+      startEditFlow(messageID)
+    },
+    [handleQueuedEdit, startEditFlow],
+  )
 
   // In inverted mode, offset 0 = bottom. Show scroll button when scrolled away from bottom.
   const handleScroll = useCallback((event: any) => {
@@ -636,17 +774,16 @@ export default function SessionScreen() {
           title: currentSession?.title || t("session.titleFallback"),
           headerRight: () => (
             <View style={s.headerRight}>
-              {shortDir && (
-                <View style={[s.dirBadge, isDark && s.dirBadgeDark, themed && { backgroundColor: p.element }]}>
-                  <Ionicons name="folder-outline" size={14} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
-                  <Text style={[s.dirText, isDark && s.dirTextDark, themed && { color: p.muted }]}>{shortDir}</Text>
-                </View>
-              )}
+              {/* TUI status line: agent · model · directory, dim and compact */}
+              <Text style={[s.statusLine, { fontFamily: mono, color: p.muted }]} numberOfLines={1}>
+                {agent || "build"} · {modelLabel}
+                {shortDir ? ` · ${shortDir}` : ""}
+              </Text>
               <TouchableOpacity onPress={() => setShowInfo((v) => !v)} hitSlop={8}>
                 <Ionicons
                   name={showInfo ? "stats-chart" : "stats-chart-outline"}
                   size={20}
-                  color={themed ? (showInfo ? p.info : p.muted) : showInfo ? "#3b82f6" : isDark ? "#888888" : "#666666"}
+                  color={showInfo ? p.info : p.muted}
                 />
               </TouchableOpacity>
             </View>
@@ -680,6 +817,7 @@ export default function SessionScreen() {
           providers={providers}
           visible={showInfo}
           isDark={isDark}
+          palette={p}
           hasMore={hasMore}
           loadingAll={loadingMore}
           onLoadAll={() => {
@@ -757,8 +895,11 @@ export default function SessionScreen() {
                   message={item.message}
                   parts={item.parts}
                   isDark={isDark}
+                  palette={p}
+                  queued={queuedSet.has(item.message.id)}
                   onSelectText={openSelectTextSheet}
-                  onEdit={startEditFlow}
+                  onEdit={handleBubbleEdit}
+                  onCancelQueued={handleCancelQueued}
                 />
               )}
               contentContainerStyle={s.messageList}
@@ -804,7 +945,7 @@ export default function SessionScreen() {
         )}
 
         {/* Status */}
-        {currentSession && <StatusIndicator sessionID={currentSession.id} isDark={isDark} />}
+        {currentSession && <StatusIndicator sessionID={currentSession.id} isDark={isDark} palette={p} />}
 
         {/* Permissions */}
         {permissions.map((perm) => (
@@ -812,6 +953,7 @@ export default function SessionScreen() {
             key={perm.id}
             permission={perm}
             isDark={isDark}
+            palette={p}
             onReply={(reply) => handlePermissionReply(perm.id, reply)}
           />
         ))}
@@ -822,6 +964,7 @@ export default function SessionScreen() {
             key={q.id}
             request={q}
             isDark={isDark}
+            palette={p}
             onReply={(answers) => handleQuestionReply(q.id, answers)}
             onReject={() => handleQuestionReject(q.id)}
           />
@@ -829,51 +972,39 @@ export default function SessionScreen() {
 
         {/* Slash popover */}
         {slashActive && (
-          <SlashPopover query={slashQuery} commands={allCommands} isDark={isDark} onSelect={handleSlashSelect} />
+          <SlashPopover query={slashQuery} commands={allCommands} isDark={isDark} palette={p} onSelect={handleSlashSelect} />
         )}
 
-        {/* Agent/model toolbar */}
-        <View style={[s.toolbar, isDark && s.toolbarDark, themed && { backgroundColor: p.background, borderTopColor: p.border }]}>
+        {/* Agent/model toolbar: flat TUI chrome, 1px rules, mono labels */}
+        <View style={[s.toolbar, { backgroundColor: p.background, borderTopColor: p.borderSubtle }]}>
           <TouchableOpacity
-            style={[s.agentChip, { borderColor: agentColor }]}
+            style={[s.agentChip, { borderColor: p.borderSubtle }]}
             onPress={() => agentSheetRef.current?.expand()}
             onLongPress={() => cycleAgent()}
             testID="agent-chip"
           >
             <View style={[s.agentDot, { backgroundColor: agentColor }]} />
-            <Text style={[s.agentLabel, isDark && s.textWhite, themed && { color: p.text }]}>{agent || "build"}</Text>
-            <Ionicons name="swap-horizontal-outline" size={12} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+            <Text style={[s.agentLabel, { fontFamily: mono, color: p.text }]}>{agent || "build"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[s.modelChip, isDark && s.modelChipDark, themed && { backgroundColor: p.element }]}
+            style={[s.modelChip, { borderColor: p.borderSubtle }]}
             onPress={() => modelSheetRef.current?.expand()}
             testID="model-chip"
           >
-            <Ionicons name="hardware-chip-outline" size={14} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
-            <Text style={[s.modelLabel, isDark && s.metaDark, themed && { color: p.muted }]} numberOfLines={1}>
+            <Text style={[s.modelLabel, { fontFamily: mono, color: p.muted }]} numberOfLines={1}>
               {modelLabel}
             </Text>
           </TouchableOpacity>
 
           {currentModelVariants && Object.keys(currentModelVariants).length > 0 && (
             <TouchableOpacity
-              style={[
-                s.variantChip,
-                isDark && s.variantChipDark,
-                variant && s.variantChipActive,
-                themed && { backgroundColor: p.element },
-              ]}
+              style={[s.variantChip, { borderColor: variant ? p.accent : p.borderSubtle }]}
               onPress={() => variantSheetRef.current?.expand()}
               testID="variant-chip"
             >
-              <Ionicons
-                name="flash-outline"
-                size={14}
-                color={themed ? (variant ? p.accent : p.muted) : variant ? "#8b5cf6" : isDark ? "#888888" : "#666666"}
-              />
               <Text
-                style={[s.variantLabel, isDark && s.metaDark, variant && s.variantLabelActive, themed && { color: variant ? p.accent : p.muted }]}
+                style={[s.variantLabel, { fontFamily: mono, color: variant ? p.accent : p.muted }]}
                 numberOfLines={1}
               >
                 {variant ? variant.charAt(0).toUpperCase() + variant.slice(1) : t("session.toolbar.auto")}
@@ -885,28 +1016,28 @@ export default function SessionScreen() {
         {/* Attachment preview */}
         <ImageAttachments attachments={attachments} isDark={isDark} onRemove={removeAttachment} />
 
-        {/* Input */}
+        {/* Input: terminal prompt — flat, `>` marker, monospace, no bubble */}
         <View
           style={[
             s.inputContainer,
-            isDark && s.inputContainerDark,
-            themed && { backgroundColor: p.background, borderTopColor: p.border },
+            { backgroundColor: p.background, borderTopColor: p.borderSubtle },
             { paddingBottom: Math.max(12, insets.bottom) },
           ]}
         >
           <View style={s.inputRow}>
+            <Text style={[s.promptMark, { fontFamily: mono, color: p.primary }]}>{GUTTER_USER}</Text>
             {/* Attach button */}
             <TouchableOpacity style={s.attachBtn} onPress={pickFromLibrary} onLongPress={pickFromCamera}>
-              <Ionicons name="add-circle-outline" size={26} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+              <Ionicons name="add-circle-outline" size={26} color={p.muted} />
             </TouchableOpacity>
 
             {/* Clipboard paste button */}
             <TouchableOpacity style={s.attachBtn} onPress={pasteFromClipboard}>
-              <Ionicons name="clipboard-outline" size={22} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+              <Ionicons name="clipboard-outline" size={22} color={p.muted} />
             </TouchableOpacity>
 
             <TextInput
-              style={[s.input, isDark && s.inputDark, themed && { backgroundColor: p.element, color: p.text }, speech.listening && s.inputListening]}
+              style={[s.input, { fontFamily: mono, color: p.text }, speech.listening && s.inputListening]}
               placeholder={
                 speech.listening
                   ? t("session.input.placeholderListening")
@@ -914,7 +1045,7 @@ export default function SessionScreen() {
                     ? t("session.input.placeholderFollowUp")
                     : t("session.input.placeholderDefault")
               }
-              placeholderTextColor={speech.listening ? "#ef4444" : themed ? p.muted : isDark ? "#666666" : "#999999"}
+              placeholderTextColor={speech.listening ? "#ef4444" : p.muted}
               value={speech.listening ? speech.transcript : input}
               onChangeText={speech.listening ? undefined : setInput}
               editable={!speech.listening}
@@ -931,7 +1062,7 @@ export default function SessionScreen() {
             {/* Mic button: when no input, not sending, and not listening */}
             {!isSending && !input.trim() && attachments.length === 0 && !speech.listening && (
               <TouchableOpacity style={s.micBtn} onPress={speech.start}>
-                <Ionicons name="mic" size={22} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+                <Ionicons name="mic" size={22} color={p.muted} />
               </TouchableOpacity>
             )}
             {/* Listening indicator: tap to stop */}
@@ -943,11 +1074,11 @@ export default function SessionScreen() {
             {/* Send button: when there's input */}
             {!speech.listening && (input.trim() || attachments.length > 0) && (
               <TouchableOpacity
-                style={[s.sendBtn, themed && { backgroundColor: p.primary }]}
+                style={[s.sendBtn, { backgroundColor: p.primary }]}
                 onPress={handleSend}
                 testID="chat-send-button"
               >
-                <Ionicons name="send" size={20} color={themed ? p.background : "#ffffff"} />
+                <Ionicons name="send" size={20} color={p.background} />
               </TouchableOpacity>
             )}
           </View>
@@ -990,8 +1121,9 @@ const s = StyleSheet.create({
   loading: { flex: 1, justifyContent: "center", alignItems: "center" },
   listWrap: { flex: 1, position: "relative" },
 
-  // Messages
-  messageList: { padding: 16, paddingBottom: 8 },
+  // Messages: full-width TUI blocks carry their own gutters + rules, so the
+  // list adds no horizontal padding.
+  messageList: { paddingVertical: 8 },
 
   // Scroll button
   scrollBtn: {
@@ -1038,7 +1170,7 @@ const s = StyleSheet.create({
   metaDark: { color: "#666666" },
   textWhite: { color: "#ffffff" },
 
-  // Toolbar
+  // Toolbar: flat TUI chrome
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
@@ -1046,8 +1178,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderTopWidth: 1,
-    borderTopColor: "#e5e5e5",
-    backgroundColor: "#ffffff",
   },
   toolbarDark: { borderTopColor: "#1a1a1a", backgroundColor: "#0a0a0a" },
   agentChip: {
@@ -1055,50 +1185,52 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     borderWidth: 1,
-    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   agentDot: { width: 8, height: 8, borderRadius: 4 },
-  agentLabel: { fontSize: 12, fontWeight: "600", color: "#0a0a0a" },
+  agentLabel: { fontSize: 12, fontWeight: "600" },
   modelChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   modelChipDark: { backgroundColor: "#1a1a1a" },
-  modelLabel: { fontSize: 12, color: "#666666", maxWidth: 160 },
+  modelLabel: { fontSize: 12, maxWidth: 160 },
 
   // Variant (reasoning effort) chip
   variantChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   variantChipDark: { backgroundColor: "#1a1a1a" },
   variantChipActive: { backgroundColor: "#f5f3ff" },
-  variantLabel: { fontSize: 12, color: "#666666" },
+  variantLabel: { fontSize: 12 },
   variantLabelActive: { color: "#8b5cf6" },
 
-  // Input
+  // Input: terminal prompt
   inputContainer: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#e5e5e5",
-    backgroundColor: "#ffffff",
   },
   inputContainerDark: { borderTopColor: "#1a1a1a", backgroundColor: "#0a0a0a" },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
+  },
+  promptMark: {
+    fontSize: 18,
+    fontWeight: "700",
+    paddingBottom: 8,
+    paddingRight: 2,
   },
   attachBtn: {
     width: 36,
@@ -1108,21 +1240,16 @@ const s = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: 15,
     maxHeight: 120,
-    color: "#0a0a0a",
   },
   inputDark: { backgroundColor: "#1a1a1a", color: "#ffffff" },
   inputListening: { borderWidth: 1, borderColor: "#ef4444" },
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "#0a0a0a",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
@@ -1131,7 +1258,6 @@ const s = StyleSheet.create({
   micBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
@@ -1139,7 +1265,6 @@ const s = StyleSheet.create({
   micBtnActive: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     backgroundColor: "#ef4444",
     justifyContent: "center",
     alignItems: "center",
@@ -1148,27 +1273,15 @@ const s = StyleSheet.create({
   stopBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     backgroundColor: "#ef4444",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
   },
 
-  // Header
+  // Header status line: agent · model · directory, dim and compact
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dirBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  dirBadgeDark: { backgroundColor: "#1a1a1a" },
-  dirText: { fontSize: 12, color: "#666666", fontWeight: "500" },
-  dirTextDark: { color: "#888888" },
+  statusLine: { fontSize: 12, maxWidth: 220 },
 
   // SSE reconnect/connected banner
   banner: {

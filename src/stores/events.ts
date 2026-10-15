@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { useConnections } from "./connections"
 import { useSessions, abortedSessions } from "./sessions"
+import { useSubagents } from "./subagents"
 import { send as notify } from "../lib/notifications"
 import { sanitizeBody } from "../lib/notify-format"
 import { alertKey } from "../lib/session-settlement"
@@ -337,6 +338,11 @@ export const useEvents = create<EventsState>((set, get) => ({
                 // session still lands here via busy -> idle) and wasn't aborted.
                 if (!aborted && !erroredSessions.has(sessionID)) void recordSuccessfulSession()
               }
+
+              // Child (subagent) sessions stream on the same global feed —
+              // forward so a viewed parent renders their live activity nested
+              // under the delegating tool call (stores/subagents.ts).
+              useSubagents.getState().handleEvent({ type, properties: { sessionID, status } } as any)
               break
             }
 
@@ -344,6 +350,7 @@ export const useEvents = create<EventsState>((set, get) => ({
               const info = props.info as Message | undefined
               if (!info) break
               useSessions.getState().handleEvent({ type, properties: { info } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { info } } as any)
               break
             }
 
@@ -360,6 +367,7 @@ export const useEvents = create<EventsState>((set, get) => ({
               }
 
               useSessions.getState().handleEvent({ type, properties: { part } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { part } } as any)
               break
             }
 
@@ -367,12 +375,37 @@ export const useEvents = create<EventsState>((set, get) => ({
               const info = props.info as Session | undefined
               if (!info) break
               useSessions.getState().handleEvent({ type, properties: { info } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { info } } as any)
+              break
+            }
+
+            case "inbox.enqueued": {
+              const inboxID = props.inboxID as string | undefined
+              const inboxSessionID = props.sessionID as string | undefined
+              const text = props.text as string | undefined
+              if (!inboxID) break
+              useSessions.getState().handleEvent({ type, properties: { inboxID, sessionID: inboxSessionID, text } } as any)
+              break
+            }
+
+            case "inbox.delivered": {
+              const inboxID = props.inboxID as string | undefined
+              const inboxSessionID = props.sessionID as string | undefined
+              if (!inboxID) break
+              useSessions.getState().handleEvent({ type, properties: { inboxID, sessionID: inboxSessionID } } as any)
               break
             }
 
             case "session.created": {
               const info = props.info as Session | undefined
               if (!info) break
+              // Child (subagent) sessions don't belong in the top-level list
+              // (loadSessions filters them via roots:true) — route them to the
+              // subagent store so a viewed parent can render their activity.
+              if (info.parentID) {
+                useSubagents.getState().handleEvent({ type, properties: { info } } as any)
+                break
+              }
               // Add to sessions list
               useSessions.setState((state) => {
                 const exists = state.sessions.some((s) => s.id === info.id)
@@ -386,6 +419,13 @@ export const useEvents = create<EventsState>((set, get) => ({
               const error = props.error as { message?: string } | undefined
               const sessionID = props.sessionID as string
               if (!sessionID) break
+              // A child's failure belongs to the parent's nested activity
+              // view, not the top-level error path (no banner/notify for a
+              // session the user never opened directly).
+              if (useSubagents.getState().children[sessionID]) {
+                useSubagents.getState().handleEvent({ type, properties: { sessionID, error } } as any)
+                break
+              }
               // Mark so the eventual busy -> idle transition is not counted
               // as a success for the store review prompt
               erroredSessions.add(sessionID)
