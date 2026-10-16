@@ -1,30 +1,37 @@
 import { useState } from "react"
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
-import { Ionicons } from "@expo/vector-icons"
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native"
 import { useTranslation } from "react-i18next"
+import { defaultPalette, type AppPalette } from "../../lib/opencode-theme"
+import { monoFont } from "./tui"
 
 interface Props {
   text: string
   isDark: boolean
+  palette?: AppPalette
 }
 
-export function ReasoningBlock({ text, isDark }: Props) {
+// TUI-style reasoning: a dimmed one-line summary ("Thought" + duration) with
+// a +/- disclosure marker, expanding to dimmed mono text behind a left rule
+// (mirrors the TUI's collapsed reasoning group: warning-tinted label,
+// left-border detail — see message-parts.tsx ReasoningPart).
+export function ReasoningBlock({ text, isDark, palette }: Props) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const c = palette ?? defaultPalette(isDark ? "dark" : "light")
+  const mono = monoFont(Platform.OS)
 
   return (
     <TouchableOpacity
-      style={[s.block, isDark && s.blockDark]}
+      style={[s.block, { borderLeftColor: c.borderSubtle }]}
       onPress={() => setExpanded(!expanded)}
       activeOpacity={0.7}
     >
       <View style={s.header}>
-        <Ionicons name="bulb-outline" size={14} color="#f59e0b" />
-        <Text style={[s.label, isDark && s.labelDark]}>{t("chat.reasoningBlock.label")}</Text>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color={isDark ? "#666666" : "#999999"} />
+        <Text style={[s.marker, { fontFamily: mono, color: c.warning }]}>{expanded ? "-" : "+"}</Text>
+        <Text style={[s.label, { fontFamily: mono, color: c.warning }]}>{t("chat.reasoningBlock.label")}</Text>
       </View>
       {expanded && (
-        <Text style={[s.text, isDark && s.textDark]} selectable>
+        <Text style={[s.text, { fontFamily: mono, color: c.muted }]} selectable>
           {text}
         </Text>
       )}
@@ -34,17 +41,12 @@ export function ReasoningBlock({ text, isDark }: Props) {
 
 const s = StyleSheet.create({
   block: {
-    backgroundColor: "#fffbeb",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#fef3c7",
+    marginVertical: 6,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
   },
-  blockDark: { backgroundColor: "#1a1a0a", borderColor: "#333300" },
   header: { flexDirection: "row", alignItems: "center", gap: 6 },
-  label: { fontSize: 12, fontWeight: "600", color: "#92400e", flex: 1 },
-  labelDark: { color: "#f59e0b" },
-  text: { fontSize: 13, lineHeight: 20, color: "#78350f", marginTop: 8 },
-  textDark: { color: "#d4a574" },
+  marker: { fontSize: 12, fontWeight: "700" },
+  label: { fontSize: 12, fontWeight: "600", flex: 1 },
+  text: { fontSize: 13, lineHeight: 20, marginTop: 6 },
 })

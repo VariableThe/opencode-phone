@@ -3,10 +3,10 @@ import {
   View,
   Text,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   Switch,
   StyleSheet,
-  useColorScheme,
   Linking,
   Alert,
 } from "react-native"
@@ -14,6 +14,10 @@ import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import { useAuth } from "../../src/stores/auth"
 import { useSettings } from "../../src/stores/settings"
+import { useAppPalette } from "../../src/components/useAppPalette"
+import { useNtfy } from "../../src/stores/ntfy"
+import { foregroundServiceSupported, syncForegroundService } from "../../src/lib/foreground-service"
+import { syncBackgroundPoll } from "../../src/lib/background-poll"
 import {
   categories,
   categoryMeta,
@@ -22,6 +26,8 @@ import {
 } from "../../src/lib/notifications"
 import type { Category } from "../../src/lib/notifications"
 import { hasTelemetryConsent, setTelemetryConsent } from "../../src/lib/telemetry"
+import { formatRelativeTime } from "../../src/lib/relative-time"
+import { useNow } from "../../src/lib/use-now"
 import { PRIVACY_POLICY_URL } from "../../src/lib/links"
 import { CURRENT_VERSION, checkForUpdate, type AvailableUpdate } from "../../src/lib/update-check"
 import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
@@ -41,14 +47,21 @@ function SettingRow({
   right?: React.ReactNode
   onPress?: () => void
 }) {
+  // Server-theme colors; trailing `themed &&` overrides keep the unthemed
+  // look byte-identical while painting themed surfaces when active.
+  const { palette: p, themed } = useAppPalette()
   const content = (
-    <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
-      <View style={[styles.settingIcon, isDark && styles.settingIconDark]}>
-        <Ionicons name={icon} size={22} color={isDark ? "#ffffff" : "#0a0a0a"} />
+    <View style={[styles.settingRow, isDark && styles.settingRowDark, themed && { borderBottomColor: p.border }]}>
+      <View style={[styles.settingIcon, isDark && styles.settingIconDark, themed && { backgroundColor: p.element }]}>
+        <Ionicons name={icon} size={22} color={themed ? p.text : isDark ? "#ffffff" : "#0a0a0a"} />
       </View>
       <View style={styles.settingContent}>
-        <Text style={[styles.settingLabel, isDark && styles.textDark]}>{label}</Text>
-        {description && <Text style={[styles.settingDescription, isDark && styles.metaDark]}>{description}</Text>}
+        <Text style={[styles.settingLabel, isDark && styles.textDark, themed && { color: p.text }]}>{label}</Text>
+        {description && (
+          <Text style={[styles.settingDescription, isDark && styles.metaDark, themed && { color: p.muted }]}>
+            {description}
+          </Text>
+        )}
       </View>
       {right}
     </View>
@@ -62,23 +75,49 @@ function SettingRow({
 }
 
 function SettingSection({ title, children, isDark }: { title: string; children: React.ReactNode; isDark: boolean }) {
+  const { palette: p, themed } = useAppPalette()
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>{title}</Text>
-      <View style={[styles.sectionContent, isDark && styles.sectionContentDark]}>{children}</View>
+      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark, themed && { color: p.muted }]}>
+        {title}
+      </Text>
+      <View
+        style={[
+          styles.sectionContent,
+          isDark && styles.sectionContentDark,
+          themed && { backgroundColor: p.panel, borderColor: p.border },
+        ]}
+      >
+        {children}
+      </View>
     </View>
   )
 }
 
 export default function SettingsScreen() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  const { isDark, palette: p, themed, themeName } = useAppPalette()
   const { t } = useTranslation()
 
   const { settings, hasBiometrics, updateSettings, lock } = useAuth()
-  const { notifications, setNotification, locale, setLocale } = useSettings()
+  const { notifications, setNotification, locale, setLocale, ntfy, setNtfyEnabled, setNtfy, matchServerTheme, setMatchServerTheme, backgroundPoll, setBackgroundPoll, foregroundService, setForegroundService } =
+    useSettings()
+  const { running: ntfyRunning, lastError: ntfyError, lastReceived: ntfyLast, publishTest } = useNtfy()
+  // Ticking clock for the "last received" relative label below — without it
+  // the label is computed once and goes stale while Settings stays open.
+  const now = useNow()
   const [osGranted, setOsGranted] = useState<boolean | null>(null)
   const [telemetryUpdating, setTelemetryUpdating] = useState(false)
+  const [testingNtfy, setTestingNtfy] = useState(false)
+  const [urlDraft, setUrlDraft] = useState(ntfy.baseUrl)
+  const [topicDraft, setTopicDraft] = useState(ntfy.topic)
+
+  // Drafts follow the stored values (e.g. after first load from SecureStore).
+  useEffect(() => {
+    setUrlDraft(ntfy.baseUrl)
+  }, [ntfy.baseUrl])
+  useEffect(() => {
+    setTopicDraft(ntfy.topic)
+  }, [ntfy.topic])
 
   // Settings is where a user goes to ask "what am I running?". Answer it, and if
   // a newer build exists say so here too — the banner on the sessions list is
@@ -133,6 +172,75 @@ export default function SettingsScreen() {
     [setNotification, t],
   )
 
+  // ntfy listener toggle: same OS-permission gate as the category switches,
+  // since received messages forward into the same send() path.
+  const handleNtfyToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled) {
+        const ok = await setupNotifications()
+        setOsGranted(ok)
+        if (!ok) {
+          Alert.alert(t("settings.alerts.notificationsDisabledTitle"), t("settings.alerts.notificationsDisabledMessage"))
+          return
+        }
+      }
+      setNtfyEnabled(enabled)
+    },
+    [setNtfyEnabled, t],
+  )
+
+  // In-app/background transport toggles. Same OS-permission gate as the
+  // category switches: both paths forward into send().
+  const handleBackgroundPollToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled) {
+        const ok = await setupNotifications()
+        setOsGranted(ok)
+        if (!ok) {
+          Alert.alert(t("settings.alerts.notificationsDisabledTitle"), t("settings.alerts.notificationsDisabledMessage"))
+          return
+        }
+      }
+      await setBackgroundPoll(enabled)
+      await syncBackgroundPoll(enabled)
+    },
+    [setBackgroundPoll, t],
+  )
+
+  const handleForegroundServiceToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled) {
+        const ok = await setupNotifications()
+        setOsGranted(ok)
+        if (!ok) {
+          Alert.alert(t("settings.alerts.notificationsDisabledTitle"), t("settings.alerts.notificationsDisabledMessage"))
+          return
+        }
+      }
+      await setForegroundService(enabled)
+      await syncForegroundService(enabled)
+    },
+    [setForegroundService, t],
+  )
+
+  const handleNtfyTest = useCallback(async () => {
+    if (!ntfy.enabled) {
+      Alert.alert(t("settings.ntfy.alerts.enableFirstTitle"), t("settings.ntfy.alerts.enableFirstMessage"))
+      return
+    }
+    setTestingNtfy(true)
+    try {
+      const result = await publishTest()
+      if (result.ok) {
+        Alert.alert(t("settings.ntfy.alerts.testOkTitle"), t("settings.ntfy.alerts.testOkMessage", { detail: result.detail }))
+      } else {
+        Alert.alert(t("settings.ntfy.alerts.testFailedTitle"), result.detail)
+      }
+    } finally {
+      setTestingNtfy(false)
+    }
+  }, [ntfy.enabled, publishTest, t])
+
   // Lazy-check OS permission for status display
   if (osGranted === null) {
     notificationsGranted()
@@ -156,7 +264,30 @@ export default function SettingsScreen() {
   }, [t, setLocale, localeLabels])
 
   return (
-    <ScrollView style={[styles.container, isDark && styles.containerDark]} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={[styles.container, isDark && styles.containerDark, themed && { backgroundColor: p.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <SettingSection title={t("settings.sections.appearance")} isDark={isDark}>
+        <SettingRow
+          icon="color-palette"
+          label={t("settings.appearance.matchServerTheme.label")}
+          description={
+            matchServerTheme && themeName
+              ? t("settings.appearance.matchServerTheme.descriptionOn", { name: themeName })
+              : t("settings.appearance.matchServerTheme.descriptionOff")
+          }
+          isDark={isDark}
+          right={
+            <Switch
+              value={matchServerTheme}
+              onValueChange={(value) => setMatchServerTheme(value)}
+              trackColor={{ false: "#767577", true: "#22c55e" }}
+            />
+          }
+        />
+      </SettingSection>
+
       <SettingSection title={t("settings.sections.security")} isDark={isDark}>
         <SettingRow
           icon="finger-print"
@@ -197,7 +328,7 @@ export default function SettingsScreen() {
             description={t("settings.security.lockNow.description")}
             isDark={isDark}
             onPress={lock}
-            right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
+            right={<Ionicons name="chevron-forward" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
           />
         )}
       </SettingSection>
@@ -224,11 +355,128 @@ export default function SettingsScreen() {
         })}
         {osGranted === false && (
           <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
-            <Text style={[styles.settingDescription, { color: "#ef4444", paddingLeft: 48 }]}>
+            <Text style={[styles.settingDescription, { color: themed ? p.error : "#ef4444", paddingLeft: 48 }]}>
               {t("settings.notifications.disabledNotice")}
             </Text>
           </View>
         )}
+      </SettingSection>
+
+      <SettingSection title={t("settings.sections.inapp")} isDark={isDark}>
+        <SettingRow
+          icon="refresh"
+          label={t("settings.inapp.poll.label")}
+          description={t("settings.inapp.poll.description")}
+          isDark={isDark}
+          right={
+            <Switch
+              value={backgroundPoll}
+              onValueChange={(value) => handleBackgroundPollToggle(value)}
+              trackColor={{ false: "#767577", true: "#22c55e" }}
+            />
+          }
+        />
+        {foregroundServiceSupported && (
+          <SettingRow
+            icon="pulse"
+            label={t("settings.inapp.foreground.label")}
+            description={t("settings.inapp.foreground.description")}
+            isDark={isDark}
+            right={
+              <Switch
+                value={foregroundService}
+                onValueChange={(value) => handleForegroundServiceToggle(value)}
+                trackColor={{ false: "#767577", true: "#22c55e" }}
+              />
+            }
+          />
+        )}
+        <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
+          <Text style={[styles.settingDescription, { paddingLeft: 48 }, isDark && styles.metaDark, themed && { color: p.muted }]}>
+            {t("settings.inapp.limits")}
+          </Text>
+        </View>
+      </SettingSection>
+
+      <SettingSection title={t("settings.sections.ntfy")} isDark={isDark}>
+        <SettingRow
+          icon="notifications"
+          label={t("settings.ntfy.enabled.label")}
+          description={t("settings.ntfy.enabled.description")}
+          isDark={isDark}
+          right={
+            <Switch
+              value={ntfy.enabled}
+              onValueChange={(value) => handleNtfyToggle(value)}
+              trackColor={{ false: "#767577", true: "#22c55e" }}
+            />
+          }
+        />
+        <View style={[styles.fieldRow, isDark && styles.settingRowDark, themed && { borderBottomColor: p.border }]}>
+          <Text style={[styles.settingLabel, isDark && styles.textDark, themed && { color: p.text }]}>{t("settings.ntfy.baseUrl.label")}</Text>
+          <TextInput
+            style={[styles.fieldInput, isDark && styles.fieldInputDark, themed && { backgroundColor: p.element, color: p.text }]}
+            value={urlDraft}
+            onChangeText={setUrlDraft}
+            onEndEditing={() => setNtfy({ baseUrl: urlDraft.trim() })}
+            placeholder="http://100.96.42.5:2586"
+            placeholderTextColor={themed ? p.muted : isDark ? "#666666" : "#999999"}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Text style={[styles.settingDescription, isDark && styles.metaDark]}>{t("settings.ntfy.baseUrl.description")}</Text>
+        </View>
+        <View style={[styles.fieldRow, isDark && styles.settingRowDark, themed && { borderBottomColor: p.border }]}>
+          <Text style={[styles.settingLabel, isDark && styles.textDark, themed && { color: p.text }]}>{t("settings.ntfy.topic.label")}</Text>
+          <TextInput
+            style={[styles.fieldInput, isDark && styles.fieldInputDark, themed && { backgroundColor: p.element, color: p.text }]}
+            value={topicDraft}
+            onChangeText={setTopicDraft}
+            onEndEditing={() => setNtfy({ topic: topicDraft.trim() })}
+            placeholder="oc-phone"
+            placeholderTextColor={themed ? p.muted : isDark ? "#666666" : "#999999"}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={[styles.settingDescription, isDark && styles.metaDark]}>{t("settings.ntfy.topic.description")}</Text>
+        </View>
+        <SettingRow
+          icon="flask"
+          label={t("settings.ntfy.testButton")}
+          description={
+            testingNtfy
+              ? t("settings.ntfy.testing")
+              : ntfyRunning
+                ? t("settings.ntfy.statusListening")
+                : t("settings.ntfy.statusOff")
+          }
+          isDark={isDark}
+          onPress={testingNtfy ? undefined : handleNtfyTest}
+          right={<Ionicons name="send" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
+        />
+        {ntfyLast && (
+          <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
+            <Text style={[styles.settingDescription, { paddingLeft: 48 }, isDark && styles.metaDark, themed && { color: p.muted }]}>
+              {t("settings.ntfy.lastReceived", { title: ntfyLast.title })}
+              {" · "}
+              {formatRelativeTime(ntfyLast.at, now, t, "sessionsList.time") ??
+                new Date(ntfyLast.at).toLocaleDateString()}
+            </Text>
+          </View>
+        )}
+        {ntfyError && (
+          <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
+            <Text style={[styles.settingDescription, { color: themed ? p.error : "#ef4444", paddingLeft: 48 }]}>
+              {t("settings.ntfy.lastError", { detail: ntfyError })}
+            </Text>
+          </View>
+        )}
+        <View style={[styles.settingRow, isDark && styles.settingRowDark]}>
+          <Text style={[styles.settingDescription, { paddingLeft: 48 }, isDark && styles.metaDark, themed && { color: p.muted }]}>
+            {t("settings.ntfy.foregroundNote")}
+          </Text>
+        </View>
       </SettingSection>
 
       <SettingSection title={t("settings.sections.privacy")} isDark={isDark}>
@@ -252,7 +500,7 @@ export default function SettingsScreen() {
           description={t("settings.privacy.privacyPolicy.description")}
           isDark={isDark}
           onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
-          right={<Ionicons name="open-outline" size={20} color={isDark ? "#666666" : "#999999"} />}
+          right={<Ionicons name="open-outline" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
         />
       </SettingSection>
 
@@ -263,7 +511,7 @@ export default function SettingsScreen() {
           description={localeLabels[locale]}
           isDark={isDark}
           onPress={handleLanguagePress}
-          right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
+          right={<Ionicons name="chevron-forward" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
         />
         <SettingRow
           icon="information-circle"
@@ -290,7 +538,7 @@ export default function SettingsScreen() {
           description={t("settings.about.github.description")}
           isDark={isDark}
           onPress={() => Linking.openURL("https://github.com/anomalyco/opencode")}
-          right={<Ionicons name="open-outline" size={20} color={isDark ? "#666666" : "#999999"} />}
+          right={<Ionicons name="open-outline" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
         />
         <SettingRow
           icon="document-text"
@@ -298,13 +546,13 @@ export default function SettingsScreen() {
           description={t("settings.about.docs.description")}
           isDark={isDark}
           onPress={() => Linking.openURL("https://opencode.ai/docs")}
-          right={<Ionicons name="open-outline" size={20} color={isDark ? "#666666" : "#999999"} />}
+          right={<Ionicons name="open-outline" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />}
         />
       </SettingSection>
 
       <View style={styles.footer}>
-        <Text style={[styles.footerText, isDark && styles.metaDark]}>{t("settings.footer.appName")}</Text>
-        <Text style={[styles.footerText, isDark && styles.metaDark]}>{t("settings.footer.tagline")}</Text>
+        <Text style={[styles.footerText, isDark && styles.metaDark, themed && { color: p.muted }]}>{t("settings.footer.appName")}</Text>
+        <Text style={[styles.footerText, isDark && styles.metaDark, themed && { color: p.muted }]}>{t("settings.footer.tagline")}</Text>
       </View>
     </ScrollView>
   )
@@ -382,6 +630,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666666",
     marginTop: 2,
+  },
+  fieldRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e5e5",
+    gap: 6,
+  },
+  fieldInput: {
+    backgroundColor: "#f5f5f5",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: "#0a0a0a",
+  },
+  fieldInputDark: {
+    backgroundColor: "#2a2a2a",
+    color: "#ffffff",
   },
   metaDark: {
     color: "#888888",

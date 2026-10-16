@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- opencode-phone app icon: terminal prompt mark on tokyonight background.
+       Palette: bg #1a1b26, accent #82aaff, caret #c8d3f5 (see README.md). -->
+  <rect width="1024" height="1024" fill="#1a1b26"/>
+  <rect x="232" y="232" width="560" height="560" rx="128" fill="none" stroke="#82aaff" stroke-width="52"/>
+  <polyline points="376,416 496,512 376,608" fill="none" stroke="#82aaff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="536" y="486" width="104" height="52" rx="10" fill="#c8d3f5"/>
+</svg>

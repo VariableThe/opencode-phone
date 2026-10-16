@@ -5,15 +5,16 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  useColorScheme,
   Alert,
   RefreshControl,
 } from "react-native"
 import { router, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
+import { useAppPalette } from "../../src/components/useAppPalette"
 import { useConnections, type ConnectionReachability } from "../../src/stores/connections"
 import { useSettings } from "../../src/stores/settings"
+import { openFileBrowser } from "../../src/lib/browse-nav"
 import type { ServerConnection } from "../../src/lib/types"
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200] as const
@@ -40,6 +41,7 @@ function ConnectionItem({
   isActive,
   status,
   onSelect,
+  onBrowse,
   onEdit,
   onDelete,
 }: {
@@ -48,15 +50,18 @@ function ConnectionItem({
   isActive: boolean
   status: ConnectionReachability
   onSelect: () => void
+  onBrowse: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
   const { t } = useTranslation()
+  const { palette: p, themed } = useAppPalette()
   const typeIcon = connection.type === "local" ? "wifi" : connection.type === "tunnel" ? "globe" : "cloud"
 
   const handleLongPress = () => {
     Alert.alert(connection.name, t("connectionsList.actionsAlert.message"), [
       { text: t("common.cancel"), style: "cancel" },
+      { text: t("connectionsList.actionsAlert.browse"), onPress: onBrowse },
       { text: t("connectionsList.actionsAlert.edit"), onPress: onEdit },
       { text: t("common.delete"), style: "destructive", onPress: onDelete },
     ])
@@ -69,12 +74,13 @@ function ConnectionItem({
         isDark && styles.connectionItemDark,
         isActive && styles.connectionItemActive,
         isActive && isDark && styles.connectionItemActiveDark,
+        themed && { backgroundColor: p.panel, borderColor: p.border },
       ]}
       onPress={onSelect}
       onLongPress={handleLongPress}
     >
       <View style={styles.connectionIcon}>
-        <Ionicons name={typeIcon} size={24} color={isActive ? "#22c55e" : isDark ? "#888888" : "#666666"} />
+        <Ionicons name={typeIcon} size={24} color={isActive ? (themed ? p.success : "#22c55e") : themed ? p.muted : isDark ? "#888888" : "#666666"} />
       </View>
       <View style={styles.connectionContent}>
         <View style={styles.connectionHeader}>
@@ -84,6 +90,7 @@ function ConnectionItem({
               isDark && styles.textDark,
               isActive && styles.connectionNameActive,
               isActive && isDark && styles.connectionNameActiveDark,
+              themed && { color: p.text },
             ]}
           >
             {connection.name}
@@ -97,31 +104,46 @@ function ConnectionItem({
           )}
         </View>
         <Text
-          style={[styles.connectionUrl, isDark && styles.metaDark, isActive && styles.connectionUrlActive]}
+          style={[
+            styles.connectionUrl,
+            isDark && styles.metaDark,
+            isActive && styles.connectionUrlActive,
+            themed && { color: p.muted },
+          ]}
           numberOfLines={1}
         >
           {connection.url}
         </Text>
+        {connection.defaultProjectDir ? (
+          <View style={styles.statusRow}>
+            <Ionicons name="folder-outline" size={12} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+            <Text
+              style={[styles.statusText, isDark && styles.metaDark, themed && { color: p.muted }]}
+              numberOfLines={1}
+            >
+              {connection.defaultProjectDir}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.statusRow}>
           <View style={[styles.statusDot, { backgroundColor: STATUS_DOT[status] }]} />
-          <Text style={[styles.statusText, isDark && styles.metaDark]}>{t(STATUS_LABEL_KEY[status])}</Text>
+          <Text style={[styles.statusText, isDark && styles.metaDark, themed && { color: p.muted }]}>{t(STATUS_LABEL_KEY[status])}</Text>
         </View>
         {connection.lastConnected && (
-          <Text style={[styles.connectionMeta, isDark && styles.metaDark]}>
+          <Text style={[styles.connectionMeta, isDark && styles.metaDark, themed && { color: p.muted }]}>
             {t("connectionsList.lastConnected", { date: new Date(connection.lastConnected).toLocaleDateString() })}
           </Text>
         )}
       </View>
       <TouchableOpacity onPress={onEdit} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="ellipsis-vertical" size={20} color={isDark ? "#666666" : "#999999"} />
+        <Ionicons name="ellipsis-vertical" size={20} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />
       </TouchableOpacity>
     </TouchableOpacity>
   )
 }
 
 export default function ConnectionsScreen() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  const { isDark, palette: p, themed } = useAppPalette()
   const { t } = useTranslation()
 
   const { connections, activeConnection, setActiveConnection, removeConnection, statuses, refreshStatuses } =
@@ -162,12 +184,12 @@ export default function ConnectionsScreen() {
   }
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
+    <View style={[styles.container, isDark && styles.containerDark, themed && { backgroundColor: p.background }]}>
       <FlatList
         data={connections}
         keyExtractor={(item) => item.id}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#ffffff" : "#0a0a0a"} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themed ? p.text : isDark ? "#ffffff" : "#0a0a0a"} />
         }
         renderItem={({ item }) => (
           <ConnectionItem
@@ -176,15 +198,16 @@ export default function ConnectionsScreen() {
             isActive={activeConnection?.id === item.id}
             status={statuses[item.id]?.state ?? "unknown"}
             onSelect={() => setActiveConnection(item.id)}
+            onBrowse={() => void openFileBrowser(item, activeConnection?.id === item.id, setActiveConnection)}
             onEdit={() => router.push(`/connection/${item.id}`)}
             onDelete={() => handleDelete(item)}
           />
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="server-outline" size={64} color={isDark ? "#444444" : "#cccccc"} />
-            <Text style={[styles.emptyTitle, isDark && styles.textDark]}>{t("connectionsList.empty.title")}</Text>
-            <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>
+            <Ionicons name="server-outline" size={64} color={themed ? p.muted : isDark ? "#444444" : "#cccccc"} />
+            <Text style={[styles.emptyTitle, isDark && styles.textDark, themed && { color: p.text }]}>{t("connectionsList.empty.title")}</Text>
+            <Text style={[styles.emptySubtitle, isDark && styles.metaDark, themed && { color: p.muted }]}>
               {t("connectionsList.empty.subtitle")}
             </Text>
           </View>
@@ -200,6 +223,14 @@ export default function ConnectionsScreen() {
             >
               <Ionicons name="download-outline" size={18} color={isDark ? "#888888" : "#666666"} />
               <Text style={[styles.importText, isDark && styles.textDark]}>{t("connectionsList.importButton")}</Text>
+              <Ionicons name="chevron-forward" size={16} color={isDark ? "#666666" : "#999999"} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.importRow, isDark && styles.importRowDark]}
+              onPress={() => router.push("/connection/scan")}
+            >
+              <Ionicons name="qr-code-outline" size={18} color={isDark ? "#888888" : "#666666"} />
+              <Text style={[styles.importText, isDark && styles.textDark]}>{t("qrScan.openScannerButton")}</Text>
               <Ionicons name="chevron-forward" size={16} color={isDark ? "#666666" : "#999999"} />
             </TouchableOpacity>
           </View>

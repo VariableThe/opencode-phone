@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  useColorScheme,
   RefreshControl,
   ActivityIndicator,
   Modal,
@@ -28,34 +27,44 @@ import type { Session, Project } from "../../src/lib/sdk"
 import { DirectorySwitcher, DirectoryBrowserSheet } from "../../src/components/chat"
 import { groupByDirectory } from "../../src/lib/session-grouping"
 import { UpdateBanner } from "../../src/components/UpdateBanner"
+import { useAppPalette } from "../../src/components/useAppPalette"
 import { nameOf } from "../../src/lib/path-utils"
+import { formatRelativeTime } from "../../src/lib/relative-time"
+import { useNow } from "../../src/lib/use-now"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
+import { filterModels } from "../../src/lib/model-filter"
 
-function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return t("sessionsList.time.justNow")
-  if (diff < 3600000) return t("sessionsList.time.minutesAgo", { count: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t("sessionsList.time.hoursAgo", { count: Math.floor(diff / 3600000) })
-  if (diff < 604800000) return t("sessionsList.time.daysAgo", { count: Math.floor(diff / 86400000) })
-
-  return date.toLocaleDateString()
+// Buckets from lib/relative-time.ts (unit-tested) rendered through this
+// screen's existing strings. `now` comes from a ticking useNow() clock owned
+// by SessionsScreen (one timer per screen, not per row) so labels advance
+// while the list is visible and refresh on focus.
+function formatTime(
+  timestamp: number,
+  now: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  return (
+    formatRelativeTime(timestamp, now, t, "sessionsList.time") ?? new Date(timestamp).toLocaleDateString()
+  )
 }
 
 function SessionItem({
   session,
+  now,
   isDark,
   onRename,
   onDelete,
 }: {
   session: Session
+  now: number
   isDark: boolean
   onRename: () => void
   onDelete: () => void
 }) {
   const { t } = useTranslation()
+  // Server-theme colors; trailing `themed &&` overrides keep the unthemed
+  // look byte-identical while painting themed surfaces when active.
+  const { palette: p, themed } = useAppPalette()
 
   const onPress = () => {
     router.push({
@@ -77,20 +86,28 @@ function SessionItem({
 
   return (
     <TouchableOpacity
-      style={[styles.sessionItem, isDark && styles.sessionItemDark]}
+      style={[styles.sessionItem, isDark && styles.sessionItemDark, themed && { borderBottomColor: p.border }]}
       onPress={onPress}
       onLongPress={onLongPress}
       testID={`session-item-${session.id}`}
     >
       <View style={styles.sessionContent}>
         <View style={styles.sessionHeader}>
-          <Text style={[styles.sessionTitle, isDark && styles.textDark]} numberOfLines={1}>
+          <Text
+            style={[styles.sessionTitle, isDark && styles.textDark, themed && { color: p.text }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {session.title || t("sessionsList.untitledSession")}
           </Text>
         </View>
         <View style={styles.sessionMetaRow}>
-          <Text style={[styles.sessionMeta, isDark && styles.metaDark]}>
-            {formatTime(session.time.updated, t)}
+          <Text
+            style={[styles.sessionMeta, isDark && styles.metaDark, themed && { color: p.muted }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formatTime(session.time.updated, now, t)}
             {/* summary is always present but files defaults to 0 until the
                 server populates it — only show the count when it's meaningful,
                 matching the SessionInfo panel's `summary.files > 0` guard (#55) */}
@@ -98,14 +115,25 @@ function SessionItem({
               ` · ${t("sessionsList.filesCount", { count: session.summary.files })}`}
           </Text>
           {shortDir && (
-            <View style={styles.sessionDirBadge}>
-              <Ionicons name="folder-outline" size={12} color={isDark ? "#888888" : "#666666"} />
-              <Text style={[styles.sessionDirText, isDark && styles.metaDark]}>{shortDir}</Text>
+            <View style={[styles.sessionDirBadge, themed && { backgroundColor: p.element }]}>
+              <Ionicons name="folder-outline" size={12} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+              <Text
+                style={[styles.sessionDirText, isDark && styles.metaDark, themed && { color: p.muted }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {shortDir}
+              </Text>
             </View>
           )}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />
+      <Ionicons
+        name="chevron-forward"
+        size={20}
+        color={themed ? p.muted : isDark ? "#666666" : "#999999"}
+        style={styles.sessionChevron}
+      />
     </TouchableOpacity>
   )
 }
@@ -126,21 +154,30 @@ function GroupHeader({
   isDark: boolean
   onToggle: () => void
 }) {
+  const { palette: p, themed } = useAppPalette()
   return (
     <TouchableOpacity
-      style={[styles.groupHeader, isDark && styles.groupHeaderDark]}
+      style={[
+        styles.groupHeader,
+        isDark && styles.groupHeaderDark,
+        themed && { backgroundColor: p.element, borderBottomColor: p.border },
+      ]}
       onPress={onToggle}
       activeOpacity={0.7}
     >
-      <Ionicons name="folder-outline" size={16} color={isDark ? "#8b5cf6" : "#6d28d9"} />
-      <Text style={[styles.groupHeaderText, isDark && styles.textDark]} numberOfLines={1}>
+      <Ionicons name="folder-outline" size={16} color={themed ? p.accent : isDark ? "#8b5cf6" : "#6d28d9"} />
+      <Text
+        style={[styles.groupHeaderText, isDark && styles.textDark, themed && { color: p.text }]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
         {row.shortName}
       </Text>
-      <Text style={[styles.groupHeaderCount, isDark && styles.metaDark]}>{row.count}</Text>
+      <Text style={[styles.groupHeaderCount, isDark && styles.metaDark, themed && { color: p.muted }]}>{row.count}</Text>
       <Ionicons
         name={row.collapsed ? "chevron-forward" : "chevron-down"}
         size={16}
-        color={isDark ? "#666666" : "#999999"}
+        color={themed ? p.muted : isDark ? "#666666" : "#999999"}
       />
     </TouchableOpacity>
   )
@@ -158,12 +195,23 @@ function getShortPath(
 }
 
 export default function SessionsScreen() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  const { isDark, palette: p, themed } = useAppPalette()
   const { t } = useTranslation()
   const [showNewSession, setShowNewSession] = useState(false)
   const [customDir, setCustomDir] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  // New-session agent/model overrides. Null means "follow the catalog's
+  // current selection at create time" — avoids syncing defaults into state
+  // while the catalog is still loading. The "default" sentinel is an
+  // explicit server-default choice (send no model, let opencode.json decide).
+  const [newAgent, setNewAgent] = useState<string | null>(null)
+  const [newModel, setNewModel] = useState<{ providerID: string; modelID: string } | "default" | null>(null)
+  const [modelQuery, setModelQuery] = useState("")
+  const catalogAgents = useCatalog((s) => s.agents)
+  const catalogProviders = useCatalog((s) => s.providers)
+  const catalogAgent = useCatalog((s) => s.agent)
+  const catalogModel = useCatalog((s) => s.model)
+  const catalogLoaded = useCatalog((s) => s.loaded)
   const [renaming, setRenaming] = useState<Session | null>(null)
   const [renameText, setRenameText] = useState("")
   const renamingInFlight = useRef(false)
@@ -195,6 +243,12 @@ export default function SessionsScreen() {
   // session, or to switch the active connection's directory.
   const [browseMode, setBrowseMode] = useState<"create" | "switch">("create")
   const [refreshing, setRefreshing] = useState(false)
+  // Single ticking clock for every relative label on this screen — minute
+  // granularity re-renders the list at most every 30s, ticks immediately on
+  // focus/foreground, and recomputes on every pull-to-refresh (refreshing is
+  // the manual-refresh key) so labels advance even when the fetched sessions
+  // come back unchanged and the store emits no update.
+  const now = useNow(refreshing)
   // Directories collapsed in the grouped session list. Empty by default —
   // all groups start expanded (#67).
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
@@ -232,14 +286,33 @@ export default function SessionsScreen() {
     return out
   }, [sessions, collapsedDirs])
 
-  // Fetch server-known projects when the new session modal opens
+  // Fetch server-known projects + the agent/model catalog when the new
+  // session modal opens — the pickers below are fed by the connected
+  // server, never a hardcoded list. Overrides reset so each opening starts
+  // from the catalog's current selection.
   useEffect(() => {
-    if (!showNewSession || !client) return
+    if (!showNewSession) {
+      setNewAgent(null)
+      setNewModel(null)
+      setModelQuery("")
+      return
+    }
+    if (!client) return
     client.project
       .list()
       .then(setServerProjects)
       .catch(() => setServerProjects([]))
-  }, [showNewSession, client])
+    loadCatalog()
+  }, [showNewSession, client, loadCatalog])
+
+  // Model search over the connected server's catalog (shared matcher with
+  // the chat ModelPicker). Capped for display; the count label shows the
+  // full hit total so a trimmed list is never mistaken for "no results".
+  const modalModelHits = useMemo(() => filterModels(catalogProviders, modelQuery), [catalogProviders, modelQuery])
+  const modalModelShown = useMemo(() => modalModelHits.slice(0, 20), [modalModelHits])
+  const visibleAgents = useMemo(() => catalogAgents.filter((a) => !a.hidden), [catalogAgents])
+  const resolvedNewAgent = newAgent ?? catalogAgent
+  const resolvedNewModel = newModel === "default" ? null : (newModel ?? catalogModel)
 
   const handleSwitchDirectory = useCallback(
     async (dir?: string) => {
@@ -320,39 +393,40 @@ export default function SessionsScreen() {
     [deleteSession, t],
   )
 
-  const onCreateSession = async () => {
-    if (creatingInFlight.current) return
-    creatingInFlight.current = true
-    try {
-      const session = await createSession()
-      if (session) {
-        router.push({
-          pathname: `/session/[id]`,
-          params: { id: session.id, ...(session.directory ? { directory: session.directory } : {}) },
-        })
-      } else {
-        Alert.alert(t("common.error"), t("sessionsList.alerts.createFailedMessage"))
-      }
-    } finally {
-      creatingInFlight.current = false
-    }
-  }
-
-  const onCreateInDirectory = async (dir?: string) => {
+  const onCreateInDirectory = async (
+    dir?: string,
+    opts?: { agent?: string; model?: { providerID: string; modelID: string } | null },
+  ) => {
     if (!activeConnection) return
     if (creatingInFlight.current) return
     creatingInFlight.current = true
     setIsCreating(true)
 
+    // The modal's picks win when it is open; otherwise the catalog's current
+    // selection applies (so a switch made in a chat carries over to quick
+    // create). Empty agent / null model fall through to the server default.
+    const agent = opts?.agent ?? (showNewSession ? resolvedNewAgent : catalogAgent) ?? undefined
+    const model = opts?.model !== undefined ? opts.model : showNewSession ? resolvedNewModel : catalogModel
+
     try {
-      // If a custom directory is specified, use a one-off client for that directory
-      // so we don't mutate the connection's default project
-      if (dir && dir.trim()) {
-        const dirClient = clientForDirectory(dir.trim())
+      // Explicit dir first, then the connection's directory, then its
+      // default project dir — so creating without a pick still lands in the
+      // configured default instead of the server default. The one-off client
+      // scopes v1 (directory header); the `directory` create param scopes v2
+      // (body location — header/query are ignored for creation on 2.0.29).
+      const target = dir?.trim() || activeConnection.directory || activeConnection.defaultProjectDir || ""
+      if (target) {
+        const dirClient = clientForDirectory(target)
         if (!dirClient) return
         try {
-          const session = await dirClient.session.create({})
-          addRecentDirectory(dir.trim())
+          // v2 stores agent/model at creation (verified live); v1 ignores
+          // them and carries the choice per-prompt instead.
+          const session = await dirClient.session.create({
+            directory: target,
+            ...(agent ? { agent } : {}),
+            ...(model ? { model } : {}),
+          })
+          addRecentDirectory(target)
           setShowNewSession(false)
           setCustomDir("")
           if (session) {
@@ -368,7 +442,11 @@ export default function SessionsScreen() {
         return
       }
 
-      const session = await createSession()
+      // No directory configured anywhere — create in the server default.
+      const session = await createSession(undefined, {
+        ...(agent ? { agent } : {}),
+        ...(model ? { model } : {}),
+      })
       setShowNewSession(false)
       setCustomDir("")
       if (session) {
@@ -425,8 +503,9 @@ export default function SessionsScreen() {
   }, [])
 
   const onFabPress = () => {
-    // Quick create in current project
-    onCreateSession()
+    // Quick create in the resolved project dir (connection directory, else
+    // default project dir, else server default) — same fallback as the modal.
+    void onCreateInDirectory(undefined)
   }
 
   const onFabLongPress = () => {
@@ -437,18 +516,22 @@ export default function SessionsScreen() {
 
   if (!activeConnection) {
     return (
-      <View style={[styles.emptyContainer, isDark && styles.containerDark]}>
-        <Ionicons name="server-outline" size={64} color={isDark ? "#444444" : "#cccccc"} />
-        <Text style={[styles.emptyTitle, isDark && styles.textDark]}>{t("sessionsList.empty.noConnectionTitle")}</Text>
-        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>
+      <View style={[styles.emptyContainer, isDark && styles.containerDark, themed && { backgroundColor: p.background }]}>
+        <Ionicons name="server-outline" size={64} color={themed ? p.muted : isDark ? "#444444" : "#cccccc"} />
+        <Text style={[styles.emptyTitle, isDark && styles.textDark, themed && { color: p.text }]}>
+          {t("sessionsList.empty.noConnectionTitle")}
+        </Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark, themed && { color: p.muted }]}>
           {t("sessionsList.empty.noConnectionSubtitle")}
         </Text>
         <TouchableOpacity
-          style={[styles.addButton, isDark && styles.addButtonDark]}
+          style={[styles.addButton, isDark && styles.addButtonDark, themed && { backgroundColor: p.primary }]}
           onPress={() => router.push("/connection/add")}
           testID="add-connection-button"
         >
-          <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark]}>
+          <Text
+            style={[styles.addButtonText, isDark && styles.addButtonTextDark, themed && { color: p.background }]}
+          >
             {t("sessionsList.empty.addConnectionButton")}
           </Text>
         </TouchableOpacity>
@@ -462,12 +545,18 @@ export default function SessionsScreen() {
         {/* No-server activation path (retention): a fully offline scripted
             demo, isolated from real connect/session state — see app/demo.tsx. */}
         <TouchableOpacity
-          style={[styles.tryDemoButton, isDark && styles.tryDemoButtonDark]}
+          style={[
+            styles.tryDemoButton,
+            isDark && styles.tryDemoButtonDark,
+            themed && { borderColor: p.accent },
+          ]}
           onPress={() => router.push("/demo")}
           testID="try-demo-button"
         >
-          <Ionicons name="play-circle-outline" size={16} color={isDark ? "#a78bfa" : "#6d28d9"} />
-          <Text style={[styles.tryDemoButtonText, isDark && styles.tryDemoButtonTextDark]}>
+          <Ionicons name="play-circle-outline" size={16} color={themed ? p.accent : isDark ? "#a78bfa" : "#6d28d9"} />
+          <Text
+            style={[styles.tryDemoButtonText, isDark && styles.tryDemoButtonTextDark, themed && { color: p.accent }]}
+          >
             {t("sessionsList.empty.tryDemoButton")}
           </Text>
         </TouchableOpacity>
@@ -481,24 +570,28 @@ export default function SessionsScreen() {
   // resolves (issue #76).
   if (authError) {
     return (
-      <View style={[styles.emptyContainer, isDark && styles.containerDark]}>
-        <Ionicons name="lock-closed-outline" size={64} color={isDark ? "#444444" : "#cccccc"} />
-        <Text style={[styles.emptyTitle, isDark && styles.textDark]}>{t("sessionsList.empty.authFailedTitle")}</Text>
-        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>
+      <View style={[styles.emptyContainer, isDark && styles.containerDark, themed && { backgroundColor: p.background }]}>
+        <Ionicons name="lock-closed-outline" size={64} color={themed ? p.muted : isDark ? "#444444" : "#cccccc"} />
+        <Text style={[styles.emptyTitle, isDark && styles.textDark, themed && { color: p.text }]}>
+          {t("sessionsList.empty.authFailedTitle")}
+        </Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark, themed && { color: p.muted }]}>
           {t("sessionsList.empty.authFailedSubtitle", { name: activeConnection.name })}
         </Text>
         <View style={styles.authErrorButtonRow}>
           <TouchableOpacity
-            style={[styles.addButton, isDark && styles.addButtonDark]}
+            style={[styles.addButton, isDark && styles.addButtonDark, themed && { backgroundColor: p.primary }]}
             onPress={() => router.push(`/connection/${activeConnection.id}`)}
             testID="fix-connection-button"
           >
-            <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark]}>
+            <Text
+              style={[styles.addButtonText, isDark && styles.addButtonTextDark, themed && { color: p.background }]}
+            >
               {t("sessionsList.empty.checkCredentialsButton")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.addButton, isDark && styles.addButtonDark]}
+            style={[styles.addButton, isDark && styles.addButtonDark, themed && { backgroundColor: p.primary }]}
             onPress={() => {
               // authError is cleared inside connect() itself once the retry
               // attempt starts (see src/stores/events.ts), so a manual
@@ -507,7 +600,9 @@ export default function SessionsScreen() {
             }}
             testID="retry-connection-button"
           >
-            <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark]}>{t("common.retry")}</Text>
+            <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark, themed && { color: p.background }]}>
+              {t("common.retry")}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -517,24 +612,39 @@ export default function SessionsScreen() {
   const shortPath = getShortPath(currentProject)
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
+    <View style={[styles.container, isDark && styles.containerDark, themed && { backgroundColor: p.background }]}>
       {/* Connection indicator — tap to switch project */}
       <TouchableOpacity
-        style={[styles.connectionBar, isDark && styles.connectionBarDark]}
+        style={[
+          styles.connectionBar,
+          isDark && styles.connectionBarDark,
+          themed && { borderBottomColor: p.border },
+        ]}
         onPress={() => dirSheetRef.current?.expand()}
         onLongPress={() => router.push("/(tabs)/connections")}
         activeOpacity={0.7}
         testID="connection-status-bar"
       >
         <View style={styles.connectionInfo}>
-          <View style={[styles.connectionDot, { backgroundColor: "#22c55e" }]} testID="connection-status-dot" />
-          <Text style={[styles.connectionName, isDark && styles.textDark]} numberOfLines={1}>
+          <View
+            style={[styles.connectionDot, { backgroundColor: themed ? p.success : "#22c55e" }]}
+            testID="connection-status-dot"
+          />
+          <Text
+            style={[styles.connectionName, isDark && styles.textDark, themed && { color: p.text }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {activeConnection.name}
           </Text>
           {shortPath && (
             <>
-              <Ionicons name="folder" size={14} color={isDark ? "#888888" : "#666666"} />
-              <Text style={[styles.projectPath, isDark && styles.metaDark]} numberOfLines={1}>
+              <Ionicons name="folder" size={14} color={themed ? p.muted : isDark ? "#888888" : "#666666"} />
+              <Text
+                style={[styles.projectPath, isDark && styles.metaDark, themed && { color: p.muted }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {shortPath}
               </Text>
             </>
@@ -542,19 +652,30 @@ export default function SessionsScreen() {
         </View>
         <View style={styles.connectionActions}>
           <TouchableOpacity
+            onPress={() => router.push("/browse")}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            testID="browse-files-button"
+          >
+            <Ionicons name="folder-open-outline" size={18} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => router.push("/terminals")}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             testID="terminals-button"
           >
-            <Ionicons name="terminal-outline" size={18} color={isDark ? "#666666" : "#999999"} />
+            <Ionicons name="terminal-outline" size={18} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />
           </TouchableOpacity>
-          <Ionicons name="swap-horizontal-outline" size={16} color={isDark ? "#666666" : "#999999"} />
+          <Ionicons
+            name="swap-horizontal-outline"
+            size={16}
+            color={themed ? p.muted : isDark ? "#666666" : "#999999"}
+          />
         </View>
       </TouchableOpacity>
 
       {error && (
-        <View style={styles.errorBar}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorBar, themed && { backgroundColor: p.panel, borderBottomColor: p.border }]}>
+          <Text style={[styles.errorText, themed && { color: p.error }]}>{error}</Text>
         </View>
       )}
 
@@ -569,6 +690,7 @@ export default function SessionsScreen() {
           ) : (
             <SessionItem
               session={row.session}
+              now={now}
               isDark={isDark}
               onRename={() => handleRename(row.session)}
               onDelete={() => handleDelete(row.session)}
@@ -576,16 +698,22 @@ export default function SessionsScreen() {
           )
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#ffffff" : "#0a0a0a"} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={themed ? p.text : isDark ? "#ffffff" : "#0a0a0a"}
+          />
         }
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={isDark ? "#ffffff" : "#0a0a0a"} />
+              <ActivityIndicator size="large" color={themed ? p.text : isDark ? "#ffffff" : "#0a0a0a"} />
             </View>
           ) : (
             <View style={styles.emptyList}>
-              <Text style={[styles.emptyListText, isDark && styles.metaDark]}>{t("sessionsList.empty.noSessions")}</Text>
+              <Text style={[styles.emptyListText, isDark && styles.metaDark, themed && { color: p.muted }]}>
+                {t("sessionsList.empty.noSessions")}
+              </Text>
             </View>
           )
         }
@@ -594,48 +722,197 @@ export default function SessionsScreen() {
 
       {/* FAB to create new session */}
       <TouchableOpacity
-        style={[styles.fab, isDark && styles.fabDark]}
+        style={[styles.fab, isDark && styles.fabDark, themed && { backgroundColor: p.primary }]}
         onPress={onFabPress}
         onLongPress={onFabLongPress}
         delayLongPress={500}
         testID="new-session-fab"
       >
-        <Ionicons name="add" size={28} color={isDark ? "#0a0a0a" : "#ffffff"} />
+        <Ionicons name="add" size={28} color={themed ? p.background : isDark ? "#0a0a0a" : "#ffffff"} />
       </TouchableOpacity>
 
       {/* New Session Info Modal */}
       <Modal visible={showNewSession} animationType="slide" transparent>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <TouchableOpacity style={styles.modalDismiss} activeOpacity={1} onPress={() => setShowNewSession(false)} />
-          <View style={[styles.modalContent, isDark && styles.modalContentDark]}>
+          <View style={[styles.modalContent, isDark && styles.modalContentDark, themed && { backgroundColor: p.panel }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, isDark && styles.textDark]}>{t("sessionsList.newSessionModal.title")}</Text>
+              <Text style={[styles.modalTitle, isDark && styles.textDark, themed && { color: p.text }]}>
+                {t("sessionsList.newSessionModal.title")}
+              </Text>
               <TouchableOpacity onPress={() => setShowNewSession(false)}>
-                <Ionicons name="close" size={24} color={isDark ? "#ffffff" : "#0a0a0a"} />
+                <Ionicons name="close" size={24} color={themed ? p.text : isDark ? "#ffffff" : "#0a0a0a"} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalScrollBody} keyboardShouldPersistTaps="handled">
               {/* Current directory — tapping creates session immediately */}
-              <Text style={[styles.modalLabel, isDark && styles.metaDark]}>
+              <Text style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }]}>
                 {t("sessionsList.newSessionModal.currentProjectLabel")}
               </Text>
               <TouchableOpacity
-                style={[styles.modalDirBox, isDark && styles.modalDirBoxDark]}
+                style={[styles.modalDirBox, isDark && styles.modalDirBoxDark, themed && { backgroundColor: p.element }]}
                 onPress={() => onCreateInDirectory()}
                 disabled={isCreating}
               >
-                <Ionicons name="folder" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
-                <Text style={[styles.modalDirText, isDark && styles.textDark]} numberOfLines={2}>
-                  {currentProject?.path?.absolute || activeConnection?.directory || t("sessionsList.newSessionModal.serverDefault")}
+                <Ionicons name="folder" size={20} color={themed ? p.accent : isDark ? "#8b5cf6" : "#6d28d9"} />
+                <Text
+                  style={[styles.modalDirText, isDark && styles.textDark, themed && { color: p.text }]}
+                  numberOfLines={2}
+                >
+                  {currentProject?.path?.absolute ||
+                    activeConnection?.directory ||
+                    activeConnection?.defaultProjectDir ||
+                    t("sessionsList.newSessionModal.serverDefault")}
                 </Text>
-                <Ionicons name="arrow-forward-circle" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
+                <Ionicons
+                  name="arrow-forward-circle"
+                  size={20}
+                  color={themed ? p.accent : isDark ? "#8b5cf6" : "#6d28d9"}
+                />
               </TouchableOpacity>
+
+              {/* Agent — server list, stored at creation (v2 session state) */}
+              {visibleAgents.length > 0 && (
+                <>
+                  <Text
+                    style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }, { marginTop: 16 }]}
+                  >
+                    {t("sessionsList.newSessionModal.agentLabel")}
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.agentChipRow}
+                    testID="new-session-agent-section"
+                  >
+                    {visibleAgents.map((a) => {
+                      const active = resolvedNewAgent === a.name
+                      return (
+                        <TouchableOpacity
+                          key={a.name}
+                          style={[
+                            styles.agentChip,
+                            isDark && styles.agentChipDark,
+                            active && styles.agentChipActive,
+                            themed && { backgroundColor: active ? p.element : p.element },
+                          ]}
+                          onPress={() => setNewAgent(a.name)}
+                          testID={`new-session-agent-${a.name}`}
+                        >
+                          <View style={[styles.agentChipDot, { backgroundColor: a.color || "#8b5cf6" }]} />
+                          <Text
+                            style={[
+                              styles.agentChipText,
+                              isDark && styles.textDark,
+                              active && styles.agentChipTextActive,
+                              themed && { color: active ? p.accent : p.text },
+                            ]}
+                          >
+                            {a.name}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* Model — searchable server catalog, stored at creation */}
+              <Text
+                style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }, { marginTop: 16 }]}
+              >
+                {t("sessionsList.newSessionModal.modelLabel")}
+                {modalModelHits.length > modalModelShown.length &&
+                  ` (${t("sessionsList.newSessionModal.modelCount", {
+                    shown: modalModelShown.length,
+                    total: modalModelHits.length,
+                  })})`}
+              </Text>
+              <TextInput
+                style={[styles.modalInput, isDark && styles.modalInputDark, themed && { backgroundColor: p.element, color: p.text }]}
+                placeholder={t("sessionsList.newSessionModal.modelSearchPlaceholder")}
+                placeholderTextColor={themed ? p.muted : isDark ? "#666666" : "#999999"}
+                value={modelQuery}
+                onChangeText={setModelQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="new-session-model-search"
+              />
+              <ScrollView
+                style={styles.modalModelList}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                testID="new-session-model-list"
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.projectRow,
+                    isDark && styles.projectRowDark,
+                    resolvedNewModel === null && styles.projectRowActive,
+                    themed && { backgroundColor: p.element },
+                  ]}
+                  onPress={() => setNewModel("default")}
+                  testID="new-session-model-server-default"
+                >
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={18}
+                    color={themed ? p.muted : isDark ? "#888888" : "#666666"}
+                  />
+                  <View style={styles.projectRowContent}>
+                    <Text style={[styles.projectRowName, isDark && styles.textDark, themed && { color: p.text }]}>
+                      {t("sessionsList.newSessionModal.serverDefaultModel")}
+                    </Text>
+                  </View>
+                  {resolvedNewModel === null && (
+                    <Ionicons name="checkmark-circle" size={18} color={themed ? p.accent : "#8b5cf6"} />
+                  )}
+                </TouchableOpacity>
+                {modalModelShown.map((hit) => {
+                  const active =
+                    resolvedNewModel?.providerID === hit.providerID && resolvedNewModel?.modelID === hit.modelID
+                  return (
+                    <TouchableOpacity
+                      key={`${hit.providerID}/${hit.modelID}`}
+                      style={[
+                        styles.projectRow,
+                        isDark && styles.projectRowDark,
+                        active && styles.projectRowActive,
+                        themed && { backgroundColor: p.element },
+                      ]}
+                      onPress={() => setNewModel({ providerID: hit.providerID, modelID: hit.modelID })}
+                      testID={`new-session-model-${hit.providerID}-${hit.modelID}`}
+                    >
+                      <Ionicons
+                        name="hardware-chip-outline"
+                        size={18}
+                        color={themed ? p.muted : isDark ? "#888888" : "#666666"}
+                      />
+                      <View style={styles.projectRowContent}>
+                        <Text
+                          style={[styles.projectRowName, isDark && styles.textDark, themed && { color: p.text }]}
+                          numberOfLines={1}
+                        >
+                          {hit.modelName}
+                        </Text>
+                        <Text
+                          style={[styles.projectRowPath, isDark && styles.metaDark, themed && { color: p.muted }]}
+                          numberOfLines={1}
+                        >
+                          {hit.providerName}
+                        </Text>
+                      </View>
+                      {active && <Ionicons name="checkmark-circle" size={18} color={themed ? p.accent : "#8b5cf6"} />}
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
 
               {/* Recent projects */}
               {recentDirectories.length > 0 && (
                 <>
-                  <Text style={[styles.modalLabel, isDark && styles.metaDark, { marginTop: 16 }]}>
+                  <Text style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }, { marginTop: 16 }]}>
                     {t("sessionsList.newSessionModal.recentProjectsLabel")}
                   </Text>
                   {recentDirectories.map((dir) => {
@@ -649,6 +926,7 @@ export default function SessionsScreen() {
                           styles.projectRow,
                           isDark && styles.projectRowDark,
                           isCurrent && styles.projectRowActive,
+                          themed && { backgroundColor: p.element },
                         ]}
                         onPress={() => onCreateInDirectory(dir)}
                         disabled={isCreating}
@@ -656,7 +934,7 @@ export default function SessionsScreen() {
                         <Ionicons
                           name="folder-outline"
                           size={18}
-                          color={isCurrent ? "#8b5cf6" : isDark ? "#888888" : "#666666"}
+                          color={themed ? (isCurrent ? p.accent : p.muted) : isCurrent ? "#8b5cf6" : isDark ? "#888888" : "#666666"}
                         />
                         <View style={styles.projectRowContent}>
                           <Text
@@ -664,16 +942,22 @@ export default function SessionsScreen() {
                               styles.projectRowName,
                               isDark && styles.textDark,
                               isCurrent && styles.projectRowNameActive,
+                              themed && { color: isCurrent ? p.accent : p.text },
                             ]}
                             numberOfLines={1}
                           >
                             {short}
                           </Text>
-                          <Text style={[styles.projectRowPath, isDark && styles.metaDark]} numberOfLines={1}>
+                          <Text
+                            style={[styles.projectRowPath, isDark && styles.metaDark, themed && { color: p.muted }]}
+                            numberOfLines={1}
+                          >
                             {dir}
                           </Text>
                         </View>
-                        {isCurrent && <Ionicons name="checkmark-circle" size={18} color="#8b5cf6" />}
+                        {isCurrent && (
+                          <Ionicons name="checkmark-circle" size={18} color={themed ? p.accent : "#8b5cf6"} />
+                        )}
                       </TouchableOpacity>
                     )
                   })}
@@ -681,30 +965,44 @@ export default function SessionsScreen() {
               )}
 
               {/* Server-known projects (excluding current) */}
-              {serverProjects.filter((p) => p.path?.absolute !== currentProject?.path?.absolute).length > 0 && (
+              {serverProjects.filter((proj) => proj.path?.absolute !== currentProject?.path?.absolute).length > 0 && (
                 <>
-                  <Text style={[styles.modalLabel, isDark && styles.metaDark, { marginTop: 16 }]}>
+                  <Text style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }, { marginTop: 16 }]}>
                     {t("sessionsList.newSessionModal.serverProjectsLabel")}
                   </Text>
                   {serverProjects
-                    .filter((p) => p.path?.absolute !== currentProject?.path?.absolute)
-                    .map((p) => {
-                      const short = p.name || p.path?.absolute?.split("/").filter(Boolean).pop() || p.id
+                    .filter((proj) => proj.path?.absolute !== currentProject?.path?.absolute)
+                    .map((proj) => {
+                      const short = proj.name || proj.path?.absolute?.split("/").filter(Boolean).pop() || proj.id
                       return (
                         <TouchableOpacity
-                          key={p.id}
-                          style={[styles.projectRow, isDark && styles.projectRowDark]}
-                          onPress={() => onCreateInDirectory(p.path?.absolute)}
+                          key={proj.id}
+                          style={[
+                            styles.projectRow,
+                            isDark && styles.projectRowDark,
+                            themed && { backgroundColor: p.element },
+                          ]}
+                          onPress={() => onCreateInDirectory(proj.path?.absolute)}
                           disabled={isCreating}
                         >
-                          <Ionicons name="code-slash-outline" size={18} color={isDark ? "#888888" : "#666666"} />
+                          <Ionicons
+                            name="code-slash-outline"
+                            size={18}
+                            color={themed ? p.muted : isDark ? "#888888" : "#666666"}
+                          />
                           <View style={styles.projectRowContent}>
-                            <Text style={[styles.projectRowName, isDark && styles.textDark]} numberOfLines={1}>
+                            <Text
+                              style={[styles.projectRowName, isDark && styles.textDark, themed && { color: p.text }]}
+                              numberOfLines={1}
+                            >
                               {short}
                             </Text>
-                            {p.path?.absolute && (
-                              <Text style={[styles.projectRowPath, isDark && styles.metaDark]} numberOfLines={1}>
-                                {p.path.absolute}
+                            {proj.path?.absolute && (
+                              <Text
+                                style={[styles.projectRowPath, isDark && styles.metaDark, themed && { color: p.muted }]}
+                                numberOfLines={1}
+                              >
+                                {proj.path.absolute}
                               </Text>
                             )}
                           </View>
@@ -716,33 +1014,38 @@ export default function SessionsScreen() {
 
               {/* Browse the server's filesystem instead of typing a path */}
               <TouchableOpacity
-                style={[styles.projectRow, isDark && styles.projectRowDark, { marginTop: 16 }]}
+                style={[
+                  styles.projectRow,
+                  isDark && styles.projectRowDark,
+                  themed && { backgroundColor: p.element },
+                  { marginTop: 16 },
+                ]}
                 onPress={() =>
                   openBrowser(currentProject?.path?.absolute || activeConnection?.directory || null, "create")
                 }
                 disabled={isCreating}
                 testID="browse-folders-button"
               >
-                <Ionicons name="folder-open-outline" size={18} color={isDark ? "#8b5cf6" : "#6d28d9"} />
+                <Ionicons name="folder-open-outline" size={18} color={themed ? p.accent : isDark ? "#8b5cf6" : "#6d28d9"} />
                 <View style={styles.projectRowContent}>
-                  <Text style={[styles.projectRowName, isDark && styles.textDark]}>
+                  <Text style={[styles.projectRowName, isDark && styles.textDark, themed && { color: p.text }]}>
                     {t("sessionsList.newSessionModal.browseFoldersLabel")}
                   </Text>
-                  <Text style={[styles.projectRowPath, isDark && styles.metaDark]}>
+                  <Text style={[styles.projectRowPath, isDark && styles.metaDark, themed && { color: p.muted }]}>
                     {t("sessionsList.newSessionModal.browseFoldersHint")}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={isDark ? "#666666" : "#999999"} />
+                <Ionicons name="chevron-forward" size={16} color={themed ? p.muted : isDark ? "#666666" : "#999999"} />
               </TouchableOpacity>
 
               {/* Manual path input fallback */}
-              <Text style={[styles.modalLabel, isDark && styles.metaDark, { marginTop: 16 }]}>
+              <Text style={[styles.modalLabel, isDark && styles.metaDark, themed && { color: p.muted }, { marginTop: 16 }]}>
                 {t("sessionsList.newSessionModal.enterPathLabel")}
               </Text>
               <TextInput
-                style={[styles.modalInput, isDark && styles.modalInputDark]}
+                style={[styles.modalInput, isDark && styles.modalInputDark, themed && { backgroundColor: p.element, color: p.text }]}
                 placeholder={serverHome ? `${serverHome}/...` : "/path/to/project"}
-                placeholderTextColor={isDark ? "#666666" : "#999999"}
+                placeholderTextColor={themed ? p.muted : isDark ? "#666666" : "#999999"}
                 value={customDir}
                 onChangeText={(text) => {
                   // Expand ~ to server home directory
@@ -761,16 +1064,20 @@ export default function SessionsScreen() {
               {serverHome && (
                 <View style={styles.pathChips}>
                   <TouchableOpacity
-                    style={[styles.pathChip, isDark && styles.pathChipDark]}
+                    style={[styles.pathChip, isDark && styles.pathChipDark, themed && { backgroundColor: p.element }]}
                     onPress={() => setCustomDir(serverHome)}
                   >
-                    <Text style={[styles.pathChipText, isDark && styles.pathChipTextDark]}>~</Text>
+                    <Text style={[styles.pathChipText, isDark && styles.pathChipTextDark, themed && { color: p.text }]}>
+                      ~
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.pathChip, isDark && styles.pathChipDark]}
+                    style={[styles.pathChip, isDark && styles.pathChipDark, themed && { backgroundColor: p.element }]}
                     onPress={() => setCustomDir(serverHome + "/")}
                   >
-                    <Text style={[styles.pathChipText, isDark && styles.pathChipTextDark]}>~/</Text>
+                    <Text style={[styles.pathChipText, isDark && styles.pathChipTextDark, themed && { color: p.text }]}>
+                      ~/
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -784,14 +1091,21 @@ export default function SessionsScreen() {
                     styles.modalButtonPrimary,
                     isDark && styles.modalButtonPrimaryDark,
                     styles.modalButtonFull,
+                    themed && { backgroundColor: p.primary },
                   ]}
                   onPress={() => onCreateInDirectory(customDir)}
                   disabled={isCreating}
                 >
                   {isCreating ? (
-                    <ActivityIndicator size="small" color={isDark ? "#0a0a0a" : "#ffffff"} />
+                    <ActivityIndicator size="small" color={themed ? p.background : isDark ? "#0a0a0a" : "#ffffff"} />
                   ) : (
-                    <Text style={[styles.modalButtonTextPrimary, isDark && styles.modalButtonTextPrimaryDark]}>
+                    <Text
+                      style={[
+                        styles.modalButtonTextPrimary,
+                        isDark && styles.modalButtonTextPrimaryDark,
+                        themed && { color: p.background },
+                      ]}
+                    >
                       {t("sessionsList.newSessionModal.createInButton", {
                         dir: customDir.split("/").filter(Boolean).pop() || customDir,
                       })}
@@ -805,14 +1119,21 @@ export default function SessionsScreen() {
                     styles.modalButtonPrimary,
                     isDark && styles.modalButtonPrimaryDark,
                     styles.modalButtonFull,
+                    themed && { backgroundColor: p.primary },
                   ]}
                   onPress={() => onCreateInDirectory()}
                   disabled={isCreating}
                 >
                   {isCreating ? (
-                    <ActivityIndicator size="small" color={isDark ? "#0a0a0a" : "#ffffff"} />
+                    <ActivityIndicator size="small" color={themed ? p.background : isDark ? "#0a0a0a" : "#ffffff"} />
                   ) : (
-                    <Text style={[styles.modalButtonTextPrimary, isDark && styles.modalButtonTextPrimaryDark]}>
+                    <Text
+                      style={[
+                        styles.modalButtonTextPrimary,
+                        isDark && styles.modalButtonTextPrimaryDark,
+                        themed && { color: p.background },
+                      ]}
+                    >
                       {t("sessionsList.newSessionModal.createSessionButton")}
                     </Text>
                   )}
@@ -910,6 +1231,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1a1a1a",
   },
   connectionInfo: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -923,11 +1247,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
+    flexShrink: 0,
+    marginLeft: 8,
   },
   connectionName: {
     fontSize: 14,
     fontWeight: "600",
     color: "#0a0a0a",
+    flexShrink: 1,
   },
   connectionUrl: {
     fontSize: 12,
@@ -964,6 +1291,7 @@ const styles = StyleSheet.create({
   },
   groupHeaderText: {
     flex: 1,
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: "600",
     color: "#0a0a0a",
@@ -971,6 +1299,7 @@ const styles = StyleSheet.create({
   groupHeaderCount: {
     fontSize: 12,
     color: "#666666",
+    flexShrink: 0,
   },
   sessionItem: {
     flexDirection: "row",
@@ -984,6 +1313,7 @@ const styles = StyleSheet.create({
   },
   sessionContent: {
     flex: 1,
+    minWidth: 0,
   },
   sessionHeader: {
     flexDirection: "row",
@@ -1003,11 +1333,14 @@ const styles = StyleSheet.create({
   sessionMeta: {
     fontSize: 13,
     color: "#666666",
+    flex: 1,
+    flexShrink: 1,
   },
   sessionMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
   sessionDirBadge: {
     flexDirection: "row",
@@ -1017,6 +1350,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
+    maxWidth: "50%",
+  },
+  sessionChevron: {
+    flexShrink: 0,
+    marginLeft: 8,
   },
   sessionDirText: {
     fontSize: 11,
@@ -1208,6 +1547,46 @@ const styles = StyleSheet.create({
     color: "#666666",
     marginBottom: 8,
     textTransform: "uppercase",
+  },
+  agentChipRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: 4,
+  },
+  agentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "transparent",
+    flexShrink: 0,
+  },
+  agentChipDark: {
+    backgroundColor: "#2a2a2a",
+  },
+  agentChipActive: {
+    borderColor: "#8b5cf6",
+  },
+  agentChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  agentChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0a0a0a",
+  },
+  agentChipTextActive: {
+    color: "#8b5cf6",
+  },
+  modalModelList: {
+    maxHeight: 220,
+    marginTop: 8,
   },
   modalDirBox: {
     flexDirection: "row",

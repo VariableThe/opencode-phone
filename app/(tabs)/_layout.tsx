@@ -1,26 +1,27 @@
 import { Tabs } from "expo-router"
-import { useColorScheme } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
+import { useAppPalette } from "../../src/components/useAppPalette"
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  // Palette overrides apply only while a server theme is active (`themed`);
+  // otherwise every color below is exactly the long-standing dark/light value.
+  const { isDark, palette, themed } = useAppPalette()
   const { t } = useTranslation()
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: isDark ? "#ffffff" : "#0a0a0a",
-        tabBarInactiveTintColor: isDark ? "#666666" : "#999999",
+        tabBarActiveTintColor: themed ? palette.primary : isDark ? "#ffffff" : "#0a0a0a",
+        tabBarInactiveTintColor: themed ? palette.muted : isDark ? "#666666" : "#999999",
         tabBarStyle: {
-          backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
-          borderTopColor: isDark ? "#1a1a1a" : "#e5e5e5",
+          backgroundColor: themed ? palette.background : isDark ? "#0a0a0a" : "#ffffff",
+          borderTopColor: themed ? palette.border : isDark ? "#1a1a1a" : "#e5e5e5",
         },
         headerStyle: {
-          backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
+          backgroundColor: themed ? palette.background : isDark ? "#0a0a0a" : "#ffffff",
         },
-        headerTintColor: isDark ? "#ffffff" : "#0a0a0a",
+        headerTintColor: themed ? palette.text : isDark ? "#ffffff" : "#0a0a0a",
       }}
     >
       <Tabs.Screen

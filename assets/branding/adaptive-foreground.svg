@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
+  <!-- Adaptive-icon foreground. Transparent background: the solid #1a1b26
+       background comes from app.json android.adaptiveIcon.backgroundColor and
+       @color/ic_launcher_background in the prebuilt android/ project.
+       The chevron + cursor sit inside the 264px safe circle; only the
+       rounded-square frame intentionally bleeds to the mask edge. -->
+  <g transform="translate(216 216) scale(0.43) translate(-512 -512)">
+    <rect x="232" y="232" width="560" height="560" rx="128" fill="none" stroke="#82aaff" stroke-width="52"/>
+    <polyline points="376,416 496,512 376,608" fill="none" stroke="#82aaff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="536" y="486" width="104" height="52" rx="10" fill="#c8d3f5"/>
+  </g>
+</svg>

@@ -14,7 +14,17 @@
       "security": "安全",
       "notifications": "通知",
       "privacy": "隐私",
-      "about": "关于"
+      "about": "关于",
+      "appearance": "外观",
+      "inapp": "后台更新",
+      "ntfy": "ntfy 推送"
+    },
+    "appearance": {
+      "matchServerTheme": {
+        "label": "跟随服务器主题",
+        "descriptionOn": "正在使用服务器的“{{name}}”主题",
+        "descriptionOff": "服务器有活动主题时自动跟随"
+      }
     },
     "security": {
       "biometricOpen": {
@@ -33,6 +43,45 @@
     },
     "notifications": {
       "disabledNotice": "通知已在系统层面关闭。请在系统设置中启用通知以接收提醒。"
+    },
+    "inapp": {
+      "poll": {
+        "label": "后台检查",
+        "description": "应用在后台时定期复查关注的会话"
+      },
+      "foreground": {
+        "label": "前台服务（Android）",
+        "description": "通过常驻状态栏通知持续监听，及时送达提醒"
+      },
+      "limits": "后台检查至少间隔 15 分钟，且可能被省电模式延迟 —— 仅作兜底，不能即时送达。"
+    },
+    "ntfy": {
+      "enabled": {
+        "label": "ntfy 推送通知",
+        "description": "通过你的 ntfy 服务器接收会话提醒"
+      },
+      "baseUrl": {
+        "label": "ntfy 服务器地址",
+        "description": "你的 ntfy 服务器根地址"
+      },
+      "topic": {
+        "label": "主题",
+        "description": "通知将发布到该主题"
+      },
+      "testButton": "发送测试通知",
+      "testing": "发送中…",
+      "statusListening": "正在监听通知",
+      "statusOff": "推送通知已关闭",
+      "lastReceived": "上次收到：{{title}}",
+      "lastError": "错误：{{detail}}",
+      "foregroundNote": "监听器随应用运行 —— 应用关闭期间发布的消息将在下次启动时送达。",
+      "alerts": {
+        "enableFirstTitle": "请先启用 ntfy",
+        "enableFirstMessage": "请先开启 ntfy 推送，再发送测试通知。",
+        "testOkTitle": "测试已发送",
+        "testOkMessage": "测试通知{{detail}}。",
+        "testFailedTitle": "测试失败"
+      }
     },
     "privacy": {
       "crashReporting": {
@@ -135,7 +184,22 @@
       "imageFailedTitle": "图片未添加",
       "imageFailedMessage": "一张或多张图片无法处理。请尝试其他照片。",
       "speechErrorTitle": "语音输入失败",
-      "speechErrorMessage": "无法使用语音输入。请检查麦克风权限后重试。"
+      "speechErrorMessage": "无法使用语音输入。请检查麦克风权限后重试。",
+      "bareCommandTitle": "空命令",
+      "bareCommandMessage": "请在“/”后输入命令名称。",
+      "commandFailedTitle": "命令失败",
+      "commandFailedMessage": "“{{name}}”失败：{{detail}}",
+      "unknownCommandTitle": "未知命令",
+      "unknownCommandMessage": "“{{name}}”不是此服务器上的命令。",
+      "queueCancelFailedTitle": "无法取消",
+      "queueCancelFailedMessage": "无法取消已排队的消息，请重试。",
+      "switchFailedTitle": "无法切换",
+      "switchFailedMessage": "无法切换，请重试。"
+    },
+    "queue": {
+      "pending": "已排队",
+      "cancel": "取消",
+      "editResend": "编辑"
     }
   },
   "connection": {
@@ -228,7 +292,10 @@
         "noDetail": "无详细信息",
         "deleteTitle": "删除连接",
         "deleteMessage": "确定要删除 \"{{name}}\" 吗？"
-      }
+      },
+      "defaultProjectDir": "默认项目目录",
+      "browseHint": "从服务器文件系统中选择工作目录。",
+      "browseFiles": "浏览服务器文件"
     }
   },
   "nav": {
@@ -237,7 +304,8 @@
     "settingsTab": "设置",
     "addConnectionTitle": "添加连接",
     "editConnectionTitle": "编辑连接",
-    "tailscaleImportTitle": "从 Tailscale 导入"
+    "tailscaleImportTitle": "从 Tailscale 导入",
+    "qrScanTitle": "扫描二维码"
   },
   "connectionsList": {
     "activeBadge": "当前使用",
@@ -252,7 +320,8 @@
     },
     "actionsAlert": {
       "message": "您想执行什么操作？",
-      "edit": "编辑"
+      "edit": "编辑",
+      "browse": "浏览文件"
     },
     "empty": {
       "title": "暂无连接",
@@ -307,7 +376,12 @@
       "browseFoldersHint": "浏览服务器的文件系统",
       "enterPathLabel": "手动输入路径",
       "createInButton": "在 {{dir}} 中创建",
-      "createSessionButton": "创建会话"
+      "createSessionButton": "创建会话",
+      "agentLabel": "Agent",
+      "modelLabel": "模型",
+      "modelCount": "{{shown}} / 共 {{total}}",
+      "modelSearchPlaceholder": "搜索模型...",
+      "serverDefaultModel": "服务器默认"
     },
     "renameModal": {
       "title": "重命名会话"
@@ -430,6 +504,14 @@
       "patternOnly": "模式：{{pattern}}",
       "patternWithPath": "模式：{{pattern}}，路径：{{path}}"
     },
+    "subagent": {
+      "label": "子代理",
+      "working": "运行中",
+      "starting": "启动中",
+      "stale": "长时间无输出",
+      "done": "已完成",
+      "failed": "失败"
+    },
     "sessionInfo": {
       "noUsageData": "暂无使用数据",
       "loading": "加载中...",
@@ -456,6 +538,10 @@
         "hoursAgo": "{{count}} 小时前",
         "daysAgo": "{{count}} 天前"
       }
+    },
+    "agentPicker": {
+      "title": "选择 Agent",
+      "searchPlaceholder": "搜索 Agent..."
     }
   },
   "tailscaleImport": {
@@ -499,5 +585,124 @@
     "action": "去获取",
     "dismiss": "暂不",
     "upToDate": "已是最新"
+  },
+  "browse": {
+    "title": "浏览文件",
+    "authFailedMessage": "身份验证失败 —— 请检查该连接的凭据。",
+    "noStartDir": "无法确定起始目录。",
+    "noStartDirHint": "请在下方输入绝对路径，或为该连接设置默认项目目录。",
+    "invalidPath": "请输入绝对路径，例如 /home/user/project。",
+    "outsideRoot": "该路径不在此连接的项目目录内。",
+    "fileNotFound": "在服务器上未找到该文件。",
+    "fileLoadFailed": "无法加载该文件，请重试。",
+    "createFailedTitle": "无法创建会话",
+    "createFailedMessage": "创建会话失败：{{detail}}",
+    "jumpPlaceholder": "跳转到绝对路径…",
+    "go": "前往",
+    "binaryNotice": "该文件是二进制文件，无法预览。",
+    "truncatedNotice": "共 {{total}} 个字符，仅显示前 {{shown}} 个。",
+    "emptyDir": "该文件夹为空。",
+    "composerTitle": "在 {{dir}} 中新建会话",
+    "promptPlaceholder": "描述任务…",
+    "createAndSend": "创建并发送"
+  },
+  "qrScan": {
+    "subtitle": "扫描工作站显示的二维码以添加连接",
+    "permissionDeniedTitle": "需要相机权限",
+    "permissionDeniedMessage": "请允许相机权限以扫描二维码，或在下方粘贴链接。",
+    "openSettingsButton": "打开设置",
+    "retryButton": "重试",
+    "badCamera": "无法在此设备上启动相机。",
+    "scanHint": "将相机对准工作站二维码",
+    "pasteLabel": "或粘贴链接",
+    "pastePlaceholder": "ocphone://connect?…",
+    "parseButton": "解析链接",
+    "clipboardButton": "从剪贴板粘贴",
+    "previewTitle": "连接预览",
+    "nameLabel": "名称",
+    "serverUrlLabel": "服务器地址",
+    "bridgeUrlLabel": "Bridge 地址",
+    "projectDirLabel": "项目目录",
+    "usernameLabel": "用户名",
+    "secretsMissing": "该二维码不包含密钥 —— 保存前请在下方输入。",
+    "secretsEmbedded": "该二维码包含密钥。",
+    "passwordLabel": "密码",
+    "passwordPlaceholder": "服务器密码",
+    "bridgeTokenLabel": "Bridge 令牌",
+    "bridgeTokenPlaceholder": "OC_BRIDGE_TOKEN",
+    "saveButton": "保存连接",
+    "testingMessage": "正在测试连接…",
+    "rescanButton": "重新扫描",
+    "successTitle": "连接已保存",
+    "successMessage": "“{{name}}”已添加到连接列表。",
+    "openScannerButton": "扫描二维码",
+    "errors": {
+      "empty": "链接为空 —— 请重新扫描二维码或粘贴完整的 ocphone:// 链接。",
+      "malformed-uri": "该链接无效 —— 请重新扫描二维码或粘贴完整的 ocphone:// 链接。",
+      "scheme": "链接类型错误 —— 应为工作站二维码生成的 ocphone:// 链接。",
+      "host": "链接目标错误 —— 应为 ocphone://connect。",
+      "version": "链接版本不受支持 —— 请更新应用并重新生成二维码。",
+      "missing-d": "该链接不包含连接数据 —— 请重新生成二维码。",
+      "bad-encoding": "链接数据已损坏 —— 请重新扫描二维码。",
+      "bad-json": "链接数据无效 —— 请重新生成二维码。",
+      "payload-version": "连接版本不受支持 —— 请更新应用并重新生成二维码。",
+      "missing-field": "二维码缺少“{{field}}” —— 请重新生成，或在下方手动输入。",
+      "bad-field": "二维码字段“{{field}}”无效 —— 请重新生成，或在下方修正。",
+      "bad-url": "“{{field}}”地址必须以 http:// 或 https:// 开头。"
+    }
+  },
+  "terminal": {
+    "title": "终端",
+    "needsV2Title": "服务器版本过旧",
+    "needsV2Body": "终端功能需要“{{name}}”运行 opencode v2，请更新服务器。",
+    "loadFailed": "无法加载终端，请重试。",
+    "connecting": "连接中…",
+    "disconnected": "连接已断开。",
+    "detached": "已从“{{name}}”分离 —— 会话仍在运行。",
+    "exited": "进程已退出",
+    "exitedBody": "退出码 {{code}}",
+    "authFailed": "身份验证失败 —— 请检查该连接的凭据。",
+    "notFound": "在服务器上未找到该终端。",
+    "tmuxTitle": "{{name}}",
+    "tmuxAttachedHint": "已连接到 {{name}}",
+    "detach": "分离",
+    "keys": {
+      "esc": "退出键",
+      "tab": "制表键",
+      "ctrl": "Control 修饰键（先点按，再按其他键）",
+      "int": "中断（Ctrl+C）",
+      "left": "左方向键",
+      "up": "上方向键",
+      "down": "下方向键",
+      "right": "右方向键",
+      "keyboard": "显示键盘"
+    },
+    "inputLabel": "终端输入"
+  },
+  "terminals": {
+    "tabs": {
+      "tmux": "tmux",
+      "serverPty": "服务器 PTY"
+    },
+    "tmux": {
+      "openTerminal": "打开终端",
+      "opening": "正在打开…",
+      "openFailedTitle": "无法打开终端"
+    },
+    "pty": {
+      "needsV2Title": "服务器版本过旧",
+      "needsV2Body": "服务器终端需要“{{name}}”运行 opencode v2。",
+      "loadFailed": "无法加载终端列表，下拉重试。",
+      "authHint": "请检查该连接的凭据。",
+      "openHint": "点击打开",
+      "empty": "暂无终端。",
+      "newPty": "新建终端",
+      "titleLabel": "标题",
+      "cwdLabel": "工作目录",
+      "commandLabel": "命令",
+      "createButton": "创建终端",
+      "killTitle": "终止终端",
+      "killMessage": "终止“{{title}}”？正在运行的进程将被杀死。"
+    }
   }
 }

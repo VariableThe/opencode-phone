@@ -31,6 +31,8 @@ test("toSession maps v2 location/time/revert into the app shape", () => {
     id: "ses_1",
     projectID: "proj1",
     title: "Hello",
+    agent: "general",
+    model: { id: "m1", providerID: "p1" },
     location: { directory: "/srv/proj" },
     time: { created: 10, updated: 20 },
     revert: { messageID: "msg_9" },
@@ -44,6 +46,8 @@ test("toSession maps v2 location/time/revert into the app shape", () => {
     parentID: "ses_0",
     title: "Hello",
     version: "",
+    agent: "general",
+    model: { providerID: "p1", modelID: "m1" },
     time: { created: 10, updated: 20, archived: undefined },
     revert: { messageID: "msg_9", partID: undefined },
   })
@@ -250,11 +254,59 @@ test("inbox enqueue resolves the optimistic temp message with a real user messag
       item: { type: "user", payload: { text: "hello", files: [{ data: "YWJj", mime: "image/png", name: "a.png" }] } },
     }),
   )
-  assert.deepEqual(out.map((e) => e.type), ["message.updated", "message.part.updated", "message.part.updated"])
+  assert.deepEqual(out.map((e) => e.type), ["message.updated", "message.part.updated", "message.part.updated", "inbox.enqueued"])
   const info = out[0].properties.info as { id: string; role: string }
   assert.deepEqual([info.id, info.role], ["msg_u1", "user"])
   const filePart = out[2].properties.part as { type: string; url?: string }
   assert.deepEqual([filePart.type, filePart.url], ["file", "data:image/png;base64,YWJj"])
+  const queueMark = out[3].properties as { sessionID: string; inboxID: string; text: string }
+  assert.deepEqual([queueMark.sessionID, queueMark.inboxID, queueMark.text], ["s1", "msg_u1", "hello"])
+})
+
+test("inbox enqueue threads the server delivery mode for the queue gate", () => {
+  // Keyed on `Session.Inbox.User.delivery` (required "steer"|"queue" in the
+  // 2.0.29 OpenAPI): only "queue" entries are genuinely waiting — an idle
+  // send is admitted "steer" and delivered immediately, so the store must
+  // not show it queued.
+  const t = new V2EventTranslator()
+  const queued = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u1",
+      item: { type: "user", delivery: "queue", payload: { text: "wait" } },
+    }),
+  )
+  const queueMark = queued[queued.length - 1]
+  assert.equal(queueMark.type, "inbox.enqueued")
+  assert.equal((queueMark.properties as { delivery?: string }).delivery, "queue")
+
+  const immediate = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u2",
+      item: { type: "user", delivery: "steer", payload: { text: "now" } },
+    }),
+  )
+  const steerMark = immediate[immediate.length - 1]
+  assert.equal(steerMark.type, "inbox.enqueued")
+  assert.equal((steerMark.properties as { delivery?: string }).delivery, "steer")
+})
+
+test("inbox enqueue without a delivery mode emits no delivery key", () => {
+  // Older/drifted servers may omit the mode — the store treats a missing
+  // mode as queued (never lose the cancel affordance), so the translator
+  // must leave the key absent rather than invent one.
+  const t = new V2EventTranslator()
+  const out = t.translate(
+    ev("session.inbox.enqueued", {
+      sessionID: "s1",
+      inboxID: "msg_u1",
+      item: { type: "user", payload: { text: "hello" } },
+    }),
+  )
+  const mark = out[out.length - 1]
+  assert.equal(mark.type, "inbox.enqueued")
+  assert.ok(!("delivery" in mark.properties))
 })
 
 test("permission and form events feed the pending registry and the prompt UI shapes", () => {
@@ -330,6 +382,54 @@ test("toQuestionRequest skips external fields and keeps answer alignment", () =>
   })
   assert.equal(req.questions.length, 1)
   assert.equal(req.questions[0].header, "Name")
+})
+
+test("step.failed marks the assistant message finished with an error", () => {
+  const t = new V2EventTranslator()
+  t.translate(
+    ev("session.step.started", {
+      sessionID: "s1",
+      agent: "build",
+      model: { id: "m1", providerID: "p1" },
+      assistantMessageID: "msg_a1",
+      started: 100,
+    }),
+  )
+  const out = t.translate(
+    ev("session.step.failed", {
+      sessionID: "s1",
+      assistantMessageID: "msg_a1",
+      error: { data: { message: "provider blew up" } },
+      cost: 0.25,
+      tokens: { input: 3, output: 4 },
+    }),
+  )
+  assert.equal(out.length, 1)
+  assert.equal(out[0].type, "message.updated")
+  const info = out[0].properties.info as {
+    id: string
+    finish?: string
+    error?: { message: string }
+    cost?: number
+    tokens?: { input: number; output: number }
+    time: { created: number; completed?: number }
+  }
+  assert.equal(info.id, "msg_a1")
+  assert.equal(info.finish, "error")
+  assert.deepEqual(info.error, { message: "provider blew up" })
+  assert.equal(info.cost, 0.25)
+  assert.deepEqual(info.tokens, { input: 3, output: 4, reasoning: undefined, cache: undefined })
+  assert.equal(info.time.completed, 1000)
+})
+
+test("step.failed without an assistantMessageID is dropped", () => {
+  const t = new V2EventTranslator()
+  assert.deepEqual(t.translate(ev("session.step.failed", { sessionID: "s1" })), [])
+})
+
+test("instructions.updated is intentionally ignored", () => {
+  const t = new V2EventTranslator()
+  assert.deepEqual(t.translate(ev("session.instructions.updated", { sessionID: "s1" })), [])
 })
 
 test("toProviderCatalog rebuilds the v1 provider/model shape", () => {

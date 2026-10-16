@@ -5,7 +5,7 @@
 // unit-testable under plain `node --test` and keeps sdk.ts thin.
 //
 // Reference: docs/v2-api-map.md (verified against a live opencode v2 server).
-import type { Agent, Command, Event, FileEntry, Message, MessageWithParts, Part, Project, Session } from "./sdk"
+import type { Agent, Command, Event, FileEntry, InboxEntry, Message, MessageWithParts, Part, Project, Session } from "./sdk"
 
 // --- raw v2 shapes (subset we consume) ---
 
@@ -218,6 +218,11 @@ export function toSession(info: V2SessionInfo): Session {
     parentID: info.parentID,
     title: info.title ?? "",
     version: "",
+    // v2 stores the active agent/model on the session itself — surface them
+    // so the UI can reflect (and verify) the server's stored selection
+    // instead of guessing from local state.
+    agent: info.agent,
+    model: info.model ? { providerID: info.model.providerID, modelID: info.model.id } : undefined,
     time: {
       created: info.time?.created ?? 0,
       updated: info.time?.updated ?? 0,
@@ -241,7 +246,7 @@ function attachmentUrl(f: V2FileAttachment): string {
   return ""
 }
 
-function userParts(messageID: string, msg: { text?: string; files?: V2FileAttachment[] }): Part[] {
+export function userParts(messageID: string, msg: { text?: string; files?: V2FileAttachment[] }): Part[] {
   const parts: Part[] = []
   if (msg.text) {
     parts.push({ id: `${messageID}-text`, messageID, type: "text", text: msg.text })
@@ -254,6 +259,49 @@ function userParts(messageID: string, msg: { text?: string; files?: V2FileAttach
   return parts
 }
 
+/**
+ * Rebuild transcript bubbles for still-queued inbox entries on a cold start
+ * (see sessions.ts selectSession).
+ *
+ * A queued message exists only in the server's inbox, never in message
+ * history — and the optimistic local copy died with the process. Seeding
+ * just the queued ids would track the entries invisibly: no bubble renders
+ * and the cancel affordance has nothing to attach to. So every entry whose
+ * id is absent from the current transcript gets a synthesized user message
+ * with parts built by `userParts` above — the exact builder (and part-id
+ * scheme) the live `session.inbox.enqueued` fan-out uses, so the later
+ * delivery echo (`message.updated` + parts, matched by id) replaces the
+ * rebuilt parts in place instead of appending duplicates, and
+ * `inbox.delivered` only drops the queue mark while the bubble stays as a
+ * normal message.
+ *
+ * Entries already present (delivered between the history fetch and the inbox
+ * fetch, or re-seeded) are never duplicated — their ids are still reported
+ * so the caller keeps the pending mark while the server holds them. An
+ * empty inbox returns the inputs untouched: no phantom bubbles.
+ */
+export function seedQueuedMessages(
+  messages: Message[],
+  parts: Record<string, Part[]>,
+  sessionID: string,
+  entries: InboxEntry[],
+): { messages: Message[]; parts: Record<string, Part[]>; ids: string[] } {
+  const seen = new Set(messages.map((m) => m.id))
+  const ids: string[] = []
+  let next = messages
+  let nextParts: Record<string, Part[]> | null = null
+  for (const e of entries || []) {
+    if (!e?.id || ids.includes(e.id)) continue
+    ids.push(e.id)
+    if (seen.has(e.id)) continue
+    seen.add(e.id)
+    next = [...next, { id: e.id, sessionID, role: "user", time: { created: e.time ?? Date.now() } }]
+    if (!nextParts) nextParts = { ...parts }
+    nextParts[e.id] = userParts(e.id, { text: e.text, files: e.files })
+  }
+  return { messages: next, parts: nextParts ?? parts, ids }
+}
+
 function toolOutput(content: V2ToolContent[] | undefined): string | undefined {
   if (!content || content.length === 0) return undefined
   const texts = content.map((c) => (c.type === "text" ? c.text : c.uri ? `[${c.name || c.uri}]` : "")).filter(Boolean)
@@ -263,11 +311,17 @@ function toolOutput(content: V2ToolContent[] | undefined): string | undefined {
 function mapToolState(state: V2ToolState | undefined): Part["state"] {
   if (!state) return { status: "pending" }
   const title = typeof state.metadata?.title === "string" ? (state.metadata.title as string) : undefined
+  // Subagent delegations resolve their child session id here on completion
+  // (live-verified on 2.0.29: metadata.sessionID appears with the terminal
+  // state, and is absent while running) — thread it through so the parent
+  // transcript can link the tool call to the child's live activity.
+  const childID = state.metadata?.sessionID
+  const subagentSessionID = typeof childID === "string" && childID.length > 0 ? childID : undefined
   if (state.status === "streaming" || state.status === "running") {
-    return { status: "running", input: state.input, title }
+    return { status: "running", input: state.input, title, subagentSessionID }
   }
   if (state.status === "completed") {
-    return { status: "completed", input: state.input, output: toolOutput(state.content), title }
+    return { status: "completed", input: state.input, output: toolOutput(state.content), title, subagentSessionID }
   }
   return {
     status: "error",
@@ -275,6 +329,7 @@ function mapToolState(state: V2ToolState | undefined): Part["state"] {
     output: toolOutput(state.content),
     title,
     error: { message: structuredErrorMessage(state.error) },
+    subagentSessionID,
   }
 }
 
@@ -582,12 +637,18 @@ export class V2EventTranslator {
     switch (raw.type) {
       case "server.connected":
       case "project.updated":
-      case "session.inbox.delivered":
       case "session.viewed":
       case "session.metadata.updated":
       case "session.model.selected":
       case "session.agent.selected":
       case "session.usage.recorded":
+        return []
+
+      // Intentionally ignored: the server re-broadcasts the resolved
+      // AGENTS.md / specialized-agent instructions on selection. The app
+      // reads instructions via the session API, not the stream, so there is
+      // nothing to project into the chat stores.
+      case "session.instructions.updated":
         return []
 
       case "session.execution.started":
@@ -632,6 +693,25 @@ export class V2EventTranslator {
           ...base,
           time: { ...base.time, completed: raw.created ?? Date.now() },
           finish: d.finish,
+          cost: d.cost ?? base.cost,
+          tokens: d.tokens ? { input: d.tokens.input, output: d.tokens.output, reasoning: d.tokens.reasoning, cache: d.tokens.cache } : base.tokens,
+        }
+        this.assistants.set(msg.id, msg)
+        return [ev("message.updated", { info: msg })]
+      }
+
+      case "session.step.failed": {
+        // Live-verified on v2.0.29: a failed agent run emits this instead of
+        // step.ended. Mirror the step.ended projection but mark the message
+        // finished with an error so the bubble renders a failure instead of
+        // hanging idle with no completed/finish/error update.
+        if (!d.assistantMessageID) return []
+        const base = this.assistantMessage(sessionID ?? "", d.assistantMessageID, raw.created)
+        const msg: Message = {
+          ...base,
+          time: { ...base.time, completed: raw.created ?? Date.now() },
+          finish: "error",
+          error: { message: structuredErrorMessage(d.error) },
           cost: d.cost ?? base.cost,
           tokens: d.tokens ? { input: d.tokens.input, output: d.tokens.output, reasoning: d.tokens.reasoning, cache: d.tokens.cache } : base.tokens,
         }
@@ -710,13 +790,20 @@ export class V2EventTranslator {
         if (raw.type === "session.tool.input.delta") buf.input += String(d.delta ?? "")
         if (raw.type === "session.tool.input.ended" && d.text !== undefined) buf.input = String(d.text)
 
+        // Subagent delegations resolve their child session id in the tool
+        // metadata on completion (live-verified on 2.0.29) — thread it
+        // through so the parent transcript can link the tool call to the
+        // child's live activity (see subagent-link.ts).
+        const meta = d.metadata as Record<string, unknown> | undefined
+        const subagentSessionID =
+          typeof meta?.sessionID === "string" && meta.sessionID.length > 0 ? meta.sessionID : undefined
         let state: Part["state"]
         if (raw.type === "session.tool.success") {
-          state = { status: "completed", input: parsedToolInput(buf), output: toolOutput(d.content), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start, end: raw.created } }
+          state = { status: "completed", input: parsedToolInput(buf), output: toolOutput(d.content), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start, end: raw.created }, subagentSessionID }
         } else if (raw.type === "session.tool.failed") {
-          state = { status: "error", input: parsedToolInput(buf), output: toolOutput(d.content), error: { message: structuredErrorMessage(d.error) }, time: { start: buf.start, end: raw.created } }
+          state = { status: "error", input: parsedToolInput(buf), output: toolOutput(d.content), error: { message: structuredErrorMessage(d.error) }, time: { start: buf.start, end: raw.created }, subagentSessionID }
         } else {
-          state = { status: "running", input: raw.type === "session.tool.called" ? d.input : parsedToolInput(buf), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start } }
+          state = { status: "running", input: raw.type === "session.tool.called" ? d.input : parsedToolInput(buf), title: typeof d.metadata?.title === "string" ? d.metadata.title : undefined, time: { start: buf.start }, subagentSessionID }
         }
         if (raw.type === "session.tool.called") buf.start = buf.start ?? raw.created
         const part: Part = { id: `tool-${d.id}`, sessionID, messageID: d.assistantMessageID, type: "tool", tool: buf.name, callID: d.id, state }
@@ -728,6 +815,7 @@ export class V2EventTranslator {
         // so emitting it here resolves the app's optimistic `temp-` message.
         if (!sessionID || !d.inboxID) return []
         const item = d.item || {}
+        const payload = item.payload || item
         const info: Message = {
           id: d.inboxID,
           sessionID,
@@ -738,7 +826,27 @@ export class V2EventTranslator {
         for (const part of userParts(d.inboxID, item.payload || item)) {
           out.push(ev("message.part.updated", { part }))
         }
+        // Companion event so the chat store can track the pending queue
+        // separately from the transcript: delivered/cancelled remove the id.
+        // Thread the server's delivery mode through: only a "queue" entry is
+        // genuinely waiting (see the sessions store gate). The mode lives on
+        // the inbox item itself (`Session.Inbox.User.delivery`, required in
+        // the 2.0.29 OpenAPI); fall back to a top-level field if present.
+        const text = typeof payload.text === "string" ? payload.text : ""
+        const rawDelivery = (item.delivery ?? d.delivery) as unknown
+        const delivery = typeof rawDelivery === "string" ? rawDelivery : undefined
+        out.push(ev("inbox.enqueued", { sessionID, inboxID: d.inboxID, text, ...(delivery ? { delivery } : {}) }))
         return out
+      }
+
+      case "session.inbox.delivered": {
+        if (!sessionID || !d.inboxID) return []
+        return [ev("inbox.delivered", { sessionID, inboxID: d.inboxID })]
+      }
+
+      case "session.inbox.delivery.changed": {
+        if (!sessionID || !d.inboxID) return []
+        return [ev("inbox.delivery.changed", { sessionID, inboxID: d.inboxID, delivery: d.delivery })]
       }
 
       case "session.inbox.cancelled":

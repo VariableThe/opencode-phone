@@ -1,8 +1,10 @@
 import { create } from "zustand"
 import { useConnections } from "./connections"
 import { useSessions, abortedSessions } from "./sessions"
+import { useSubagents } from "./subagents"
 import { send as notify } from "../lib/notifications"
 import { sanitizeBody } from "../lib/notify-format"
+import { alertKey } from "../lib/session-settlement"
 import { statusFromPart } from "../lib/status-labels"
 import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, track } from "../lib/analytics"
@@ -259,6 +261,25 @@ export const useEvents = create<EventsState>((set, get) => ({
               if (status.type === "busy") {
                 erroredSessions.delete(sessionID)
                 abortedSessions.delete(sessionID)
+                // Re-arm the watcher's finished/failed dedupe so the next
+                // completion alerts again, and (re)track the session — a run
+                // started before this build has no watch record otherwise.
+                // Dynamic import: session-watch imports this store, so a
+                // static import would cycle.
+                const scope = useConnections.getState().activeConnection?.id ?? ""
+                if (scope) {
+                  void import("./session-watch").then(({ useSessionWatch }) => {
+                    const watch = useSessionWatch.getState()
+                    watch.resetTerminal(scope, sessionID)
+                    const match = useSessions.getState().sessions.find((s) => s.id === sessionID)
+                    watch.track({
+                      connectionId: scope,
+                      sessionId: sessionID,
+                      directory: match?.directory,
+                      title: match?.title,
+                    })
+                  })
+                }
               }
 
               set((state) => ({
@@ -292,11 +313,23 @@ export const useEvents = create<EventsState>((set, get) => ({
                 // misleading — or duplicate, contradictory — completion push.
                 if (!aborted && !erroredSessions.has(sessionID)) {
                   const match = useSessions.getState().sessions.find((s) => s.id === sessionID)
+                  const scope = useConnections.getState().activeConnection?.id ?? ""
+                  // Share the alert key with the periodic watcher so a later
+                  // background pass cannot re-fire this completion, then stop
+                  // polling the settled session (a new prompt re-tracks it).
+                  if (scope) {
+                    void import("./session-watch").then(({ useSessionWatch }) => {
+                      const watch = useSessionWatch.getState()
+                      watch.markSent(alertKey(scope, sessionID, "finished"))
+                      watch.untrack(scope, sessionID)
+                    })
+                  }
                   notify({
                     category: "completed",
                     title: "Task completed",
                     body: sanitizeBody(match?.title, "Session finished processing"),
                     sessionId: sessionID,
+                    ...(scope ? { connectionId: scope } : {}),
                   })
                 }
                 // Genuinely positive moment — count it toward the one-time
@@ -305,6 +338,11 @@ export const useEvents = create<EventsState>((set, get) => ({
                 // session still lands here via busy -> idle) and wasn't aborted.
                 if (!aborted && !erroredSessions.has(sessionID)) void recordSuccessfulSession()
               }
+
+              // Child (subagent) sessions stream on the same global feed —
+              // forward so a viewed parent renders their live activity nested
+              // under the delegating tool call (stores/subagents.ts).
+              useSubagents.getState().handleEvent({ type, properties: { sessionID, status } } as any)
               break
             }
 
@@ -312,6 +350,7 @@ export const useEvents = create<EventsState>((set, get) => ({
               const info = props.info as Message | undefined
               if (!info) break
               useSessions.getState().handleEvent({ type, properties: { info } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { info } } as any)
               break
             }
 
@@ -328,6 +367,20 @@ export const useEvents = create<EventsState>((set, get) => ({
               }
 
               useSessions.getState().handleEvent({ type, properties: { part } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { part } } as any)
+              break
+            }
+
+            case "message.removed": {
+              // Remote cancel of a queued message (`session.inbox.cancelled`
+              // from another client, e.g. the TUI): drop the local
+              // bubble/queued entry. sessions.handleEvent already handles
+              // this type — it just was never routed here, so the stale
+              // bubble survived until the next full refresh.
+              const removedID = props.messageID as string | undefined
+              const removedSessionID = props.sessionID as string | undefined
+              if (!removedID) break
+              useSessions.getState().handleEvent({ type, properties: { sessionID: removedSessionID, messageID: removedID } } as any)
               break
             }
 
@@ -335,12 +388,37 @@ export const useEvents = create<EventsState>((set, get) => ({
               const info = props.info as Session | undefined
               if (!info) break
               useSessions.getState().handleEvent({ type, properties: { info } } as any)
+              useSubagents.getState().handleEvent({ type, properties: { info } } as any)
+              break
+            }
+
+            case "inbox.enqueued": {
+              const inboxID = props.inboxID as string | undefined
+              const inboxSessionID = props.sessionID as string | undefined
+              const text = props.text as string | undefined
+              if (!inboxID) break
+              useSessions.getState().handleEvent({ type, properties: { inboxID, sessionID: inboxSessionID, text } } as any)
+              break
+            }
+
+            case "inbox.delivered": {
+              const inboxID = props.inboxID as string | undefined
+              const inboxSessionID = props.sessionID as string | undefined
+              if (!inboxID) break
+              useSessions.getState().handleEvent({ type, properties: { inboxID, sessionID: inboxSessionID } } as any)
               break
             }
 
             case "session.created": {
               const info = props.info as Session | undefined
               if (!info) break
+              // Child (subagent) sessions don't belong in the top-level list
+              // (loadSessions filters them via roots:true) — route them to the
+              // subagent store so a viewed parent can render their activity.
+              if (info.parentID) {
+                useSubagents.getState().handleEvent({ type, properties: { info } } as any)
+                break
+              }
               // Add to sessions list
               useSessions.setState((state) => {
                 const exists = state.sessions.some((s) => s.id === info.id)
@@ -354,6 +432,13 @@ export const useEvents = create<EventsState>((set, get) => ({
               const error = props.error as { message?: string } | undefined
               const sessionID = props.sessionID as string
               if (!sessionID) break
+              // A child's failure belongs to the parent's nested activity
+              // view, not the top-level error path (no banner/notify for a
+              // session the user never opened directly).
+              if (useSubagents.getState().children[sessionID]) {
+                useSubagents.getState().handleEvent({ type, properties: { sessionID, error } } as any)
+                break
+              }
               // Mark so the eventual busy -> idle transition is not counted
               // as a success for the store review prompt
               erroredSessions.add(sessionID)
@@ -368,11 +453,20 @@ export const useEvents = create<EventsState>((set, get) => ({
               if (useSessions.getState().currentSession?.id === sessionID) {
                 useSessions.getState().refreshMessages()
               }
+              const errScope = useConnections.getState().activeConnection?.id ?? ""
+              if (errScope) {
+                void import("./session-watch").then(({ useSessionWatch }) => {
+                  const watch = useSessionWatch.getState()
+                  watch.markSent(alertKey(errScope, sessionID, "failed"))
+                  watch.untrack(errScope, sessionID)
+                })
+              }
               notify({
                 category: "errors",
                 title: "Session error",
                 body: sanitizeBody(error?.message, "Something went wrong"),
                 sessionId: sessionID,
+                ...(errScope ? { connectionId: errScope } : {}),
               })
               break
             }
@@ -388,6 +482,12 @@ export const useEvents = create<EventsState>((set, get) => ({
                   [req.sessionID]: [...(state.permissions[req.sessionID] || []), req],
                 },
               }))
+              const permScope = useConnections.getState().activeConnection?.id ?? ""
+              if (permScope) {
+                void import("./session-watch").then(({ useSessionWatch }) => {
+                  useSessionWatch.getState().markSent(alertKey(permScope, req.sessionID, "blocked", req.id))
+                })
+              }
               notify({
                 category: "permissions",
                 title: "Agent needs approval",
@@ -400,6 +500,7 @@ export const useEvents = create<EventsState>((set, get) => ({
                   "A tool needs your approval",
                 ),
                 sessionId: req.sessionID,
+                ...(permScope ? { connectionId: permScope } : {}),
                 dedupeKey: `perm-${req.id}`,
                 dedupeCooldownMs: 60_000,
               })
@@ -430,11 +531,18 @@ export const useEvents = create<EventsState>((set, get) => ({
                   [req.sessionID]: [...(state.questions[req.sessionID] || []), req],
                 },
               }))
+              const formScope = useConnections.getState().activeConnection?.id ?? ""
+              if (formScope) {
+                void import("./session-watch").then(({ useSessionWatch }) => {
+                  useSessionWatch.getState().markSent(alertKey(formScope, req.sessionID, "blocked", req.id))
+                })
+              }
               notify({
                 category: "questions",
                 title: req.questions?.[0]?.header || "Input needed",
                 body: sanitizeBody(req.questions?.[0]?.question, "The assistant has a question"),
                 sessionId: req.sessionID,
+                ...(formScope ? { connectionId: formScope } : {}),
                 dedupeKey: `question-${req.id}`,
                 dedupeCooldownMs: 60_000,
               })

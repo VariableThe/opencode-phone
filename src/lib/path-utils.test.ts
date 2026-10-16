@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { stripTrailingSlash, parentOf, nameOf } from "./path-utils.ts"
+import { stripTrailingSlash, parentOf, nameOf, isAbsolutePath, normalizeAbsolute, resolveWithinRoot, breadcrumbSegments } from "./path-utils.ts"
 
 // stripTrailingSlash -------------------------------------------------------
 
@@ -85,4 +85,73 @@ test("nameOf: root paths fall back to the trimmed input", () => {
 
 test("nameOf: bare segment is returned as-is", () => {
   assert.equal(nameOf("project"), "project")
+})
+
+// isAbsolutePath -------------------------------------------------------------
+
+test("isAbsolutePath: POSIX and Windows absolute paths", () => {
+  assert.equal(isAbsolutePath("/a/b"), true)
+  assert.equal(isAbsolutePath("/"), true)
+  assert.equal(isAbsolutePath("C:/proj"), true)
+  assert.equal(isAbsolutePath("C:\\proj"), true)
+})
+
+test("isAbsolutePath: relative paths are rejected", () => {
+  assert.equal(isAbsolutePath(""), false)
+  assert.equal(isAbsolutePath("."), false)
+  assert.equal(isAbsolutePath(".."), false)
+  assert.equal(isAbsolutePath("a/b"), false)
+  assert.equal(isAbsolutePath("~/x"), false)
+  assert.equal(isAbsolutePath("C:"), false)
+})
+
+// normalizeAbsolute ----------------------------------------------------------
+
+test("normalizeAbsolute: resolves dot segments and dedups slashes", () => {
+  assert.equal(normalizeAbsolute("/a//b/./c/"), "/a/b/c")
+  assert.equal(normalizeAbsolute("/home/aditya/Projects/../../../tmp/x/"), "/tmp/x")
+  assert.equal(normalizeAbsolute("/"), "/")
+})
+
+test("normalizeAbsolute: unifies backslashes and clamps .. at the root", () => {
+  assert.equal(normalizeAbsolute("C:\\a\\..\\b"), "C:/b")
+  assert.equal(normalizeAbsolute("/../../x"), "/x")
+})
+
+// resolveWithinRoot ----------------------------------------------------------
+
+test("resolveWithinRoot: accepts the root itself and anything below it", () => {
+  assert.deepEqual(resolveWithinRoot("/a/b", "/a/b"), { ok: true, path: "/a/b" })
+  assert.deepEqual(resolveWithinRoot("/a/b", "/a/b/c/"), { ok: true, path: "/a/b/c" })
+})
+
+test("resolveWithinRoot: rejects escapes, including prefix-sibling tricks", () => {
+  assert.deepEqual(resolveWithinRoot("/a/b", "/a/bc"), { ok: false, reason: "outside-root" })
+  assert.deepEqual(resolveWithinRoot("/a/b", "/a/b/../bc"), { ok: false, reason: "outside-root" })
+  assert.deepEqual(resolveWithinRoot("/a/b", "/other"), { ok: false, reason: "outside-root" })
+  assert.deepEqual(resolveWithinRoot("/", "/other"), { ok: true, path: "/other" })
+})
+
+test("resolveWithinRoot: rejects non-absolute input and allows all when rootless", () => {
+  assert.deepEqual(resolveWithinRoot("/a", "b/c"), { ok: false, reason: "not-absolute" })
+  assert.deepEqual(resolveWithinRoot("/a", ""), { ok: false, reason: "not-absolute" })
+  assert.deepEqual(resolveWithinRoot(null, "/any/where/"), { ok: true, path: "/any/where" })
+})
+
+// breadcrumbSegments ---------------------------------------------------------
+
+test("breadcrumbSegments: full chain from the filesystem root", () => {
+  assert.deepEqual(breadcrumbSegments("/a/b"), [
+    { label: "/", path: "/" },
+    { label: "a", path: "/a" },
+    { label: "b", path: "/a/b" },
+  ])
+})
+
+test("breadcrumbSegments: root and drive roots collapse to one crumb", () => {
+  assert.deepEqual(breadcrumbSegments("/"), [{ label: "/", path: "/" }])
+  assert.deepEqual(breadcrumbSegments("C:\\x"), [
+    { label: "C:/", path: "C:/" },
+    { label: "x", path: "C:/x" },
+  ])
 })

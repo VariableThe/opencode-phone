@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.CAMERA"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+  <!-- Session-monitor foreground service (dataSync): timely delivery of
+       finished/failed/needs-input alerts while the app is backgrounded or
+       killed. The service declaration below is hand-wired into this committed
+       prebuild — `npx expo prebuild` would drop it, re-add afterwards. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
   <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
@@ -30,5 +38,11 @@
         <data android:scheme="opencode"/>
       </intent-filter>
     </activity>
+    <!-- Hand-wired (see comment on the FOREGROUND_SERVICE permissions above):
+         keeps polling watched sessions with a persistent notification. -->
+    <service
+      android:name=".SessionMonitorService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
   </application>
 </manifest>

@@ -14,7 +14,17 @@
       "security": "Security",
       "notifications": "Notifications",
       "privacy": "Privacy",
-      "about": "About"
+      "about": "About",
+      "appearance": "Appearance",
+      "inapp": "Background Updates",
+      "ntfy": "ntfy Push"
+    },
+    "appearance": {
+      "matchServerTheme": {
+        "label": "Match Server Theme",
+        "descriptionOn": "Using the \"{{name}}\" theme from your server",
+        "descriptionOff": "Follow your server's theme when one is active"
+      }
     },
     "security": {
       "biometricOpen": {
@@ -33,6 +43,45 @@
     },
     "notifications": {
       "disabledNotice": "Notifications are disabled at the system level. Enable them in Settings to receive alerts."
+    },
+    "inapp": {
+      "poll": {
+        "label": "Background Checks",
+        "description": "Periodically re-check watched sessions while the app is in the background"
+      },
+      "foreground": {
+        "label": "Foreground Service (Android)",
+        "description": "Keep a persistent watcher with a status-bar notification for timely alerts"
+      },
+      "limits": "Background checks run at most every 15 minutes and may be delayed by battery saver — a safety net, not instant delivery."
+    },
+    "ntfy": {
+      "enabled": {
+        "label": "ntfy Push Notifications",
+        "description": "Receive session alerts via your ntfy server"
+      },
+      "baseUrl": {
+        "label": "ntfy Server URL",
+        "description": "Base URL of your ntfy server"
+      },
+      "topic": {
+        "label": "Topic",
+        "description": "Notifications are published to this topic"
+      },
+      "testButton": "Send Test Notification",
+      "testing": "Sending…",
+      "statusListening": "Listening for notifications",
+      "statusOff": "Push notifications off",
+      "lastReceived": "Last received: {{title}}",
+      "lastError": "Error: {{detail}}",
+      "foregroundNote": "The listener runs inside the app — messages published while the app is closed arrive on next launch.",
+      "alerts": {
+        "enableFirstTitle": "Enable ntfy First",
+        "enableFirstMessage": "Turn on ntfy push before sending a test notification.",
+        "testOkTitle": "Test Sent",
+        "testOkMessage": "Test notification {{detail}}.",
+        "testFailedTitle": "Test Failed"
+      }
     },
     "privacy": {
       "crashReporting": {
@@ -135,7 +184,22 @@
       "imageFailedTitle": "Image not attached",
       "imageFailedMessage": "One or more images could not be processed. Please try a different photo.",
       "speechErrorTitle": "Voice input failed",
-      "speechErrorMessage": "Could not use voice input. Check your microphone permission and try again."
+      "speechErrorMessage": "Could not use voice input. Check your microphone permission and try again.",
+      "bareCommandTitle": "Empty Command",
+      "bareCommandMessage": "Type a command name after \"/\".",
+      "commandFailedTitle": "Command Failed",
+      "commandFailedMessage": "\"{{name}}\" failed: {{detail}}",
+      "unknownCommandTitle": "Unknown Command",
+      "unknownCommandMessage": "\"{{name}}\" is not a command on this server.",
+      "queueCancelFailedTitle": "Couldn't Cancel",
+      "queueCancelFailedMessage": "Could not cancel the queued message. Please try again.",
+      "switchFailedTitle": "Couldn't Switch",
+      "switchFailedMessage": "Could not switch. Please try again."
+    },
+    "queue": {
+      "pending": "Queued",
+      "cancel": "Cancel",
+      "editResend": "Edit"
     }
   },
   "connection": {
@@ -228,7 +292,10 @@
         "noDetail": "no detail",
         "deleteTitle": "Delete Connection",
         "deleteMessage": "Are you sure you want to delete \"{{name}}\"?"
-      }
+      },
+      "defaultProjectDir": "Default Project Directory",
+      "browseHint": "Pick the working directory from the server's filesystem.",
+      "browseFiles": "Browse Server Files"
     }
   },
   "nav": {
@@ -237,7 +304,8 @@
     "settingsTab": "Settings",
     "addConnectionTitle": "Add Connection",
     "editConnectionTitle": "Edit Connection",
-    "tailscaleImportTitle": "Import from Tailscale"
+    "tailscaleImportTitle": "Import from Tailscale",
+    "qrScanTitle": "Scan QR"
   },
   "connectionsList": {
     "activeBadge": "Active",
@@ -252,7 +320,8 @@
     },
     "actionsAlert": {
       "message": "What would you like to do?",
-      "edit": "Edit"
+      "edit": "Edit",
+      "browse": "Browse Files"
     },
     "empty": {
       "title": "No Connections",
@@ -307,7 +376,12 @@
       "browseFoldersHint": "Explore the server's filesystem",
       "enterPathLabel": "Enter Path Manually",
       "createInButton": "Create in {{dir}}",
-      "createSessionButton": "Create Session"
+      "createSessionButton": "Create Session",
+      "agentLabel": "Agent",
+      "modelLabel": "Model",
+      "modelCount": "{{shown}} of {{total}}",
+      "modelSearchPlaceholder": "Search models...",
+      "serverDefaultModel": "Server Default"
     },
     "renameModal": {
       "title": "Rename Session"
@@ -430,6 +504,14 @@
       "patternOnly": "Pattern: {{pattern}}",
       "patternWithPath": "Pattern: {{pattern}} in {{path}}"
     },
+    "subagent": {
+      "label": "subagent",
+      "working": "working",
+      "starting": "starting",
+      "stale": "quiet — still running",
+      "done": "done",
+      "failed": "failed"
+    },
     "sessionInfo": {
       "noUsageData": "No usage data yet",
       "loading": "Loading...",
@@ -456,6 +538,10 @@
         "hoursAgo": "{{count}}h ago",
         "daysAgo": "{{count}}d ago"
       }
+    },
+    "agentPicker": {
+      "title": "Select Agent",
+      "searchPlaceholder": "Search agents..."
     }
   },
   "tailscaleImport": {
@@ -499,5 +585,124 @@
     "action": "Get it",
     "dismiss": "Not now",
     "upToDate": "Up to date"
+  },
+  "browse": {
+    "title": "Browse Files",
+    "authFailedMessage": "Authentication failed — check this connection's credentials.",
+    "noStartDir": "Could not determine a start directory.",
+    "noStartDirHint": "Enter an absolute path below, or set a default project directory on the connection.",
+    "invalidPath": "Enter an absolute path, e.g. /home/user/project.",
+    "outsideRoot": "That path is outside this connection's project directory.",
+    "fileNotFound": "File not found on the server.",
+    "fileLoadFailed": "Could not load this file. Please try again.",
+    "createFailedTitle": "Couldn't Start Session",
+    "createFailedMessage": "Session creation failed: {{detail}}",
+    "jumpPlaceholder": "Jump to an absolute path…",
+    "go": "Go",
+    "binaryNotice": "This file is binary and can't be previewed.",
+    "truncatedNotice": "Showing first {{shown}} of {{total}} characters.",
+    "emptyDir": "This folder is empty.",
+    "composerTitle": "New Session in {{dir}}",
+    "promptPlaceholder": "Describe the task…",
+    "createAndSend": "Create & Send"
+  },
+  "qrScan": {
+    "subtitle": "Scan the QR shown by your workstation to add its connection",
+    "permissionDeniedTitle": "Camera Access Needed",
+    "permissionDeniedMessage": "Allow camera access to scan QR codes, or paste the link below instead.",
+    "openSettingsButton": "Open Settings",
+    "retryButton": "Retry",
+    "badCamera": "The camera could not be started on this device.",
+    "scanHint": "Point the camera at the workstation QR code",
+    "pasteLabel": "Or paste the link",
+    "pastePlaceholder": "ocphone://connect?…",
+    "parseButton": "Parse Link",
+    "clipboardButton": "Paste from clipboard",
+    "previewTitle": "Connection Preview",
+    "nameLabel": "Name",
+    "serverUrlLabel": "Server URL",
+    "bridgeUrlLabel": "Bridge URL",
+    "projectDirLabel": "Project Directory",
+    "usernameLabel": "Username",
+    "secretsMissing": "This QR omits secrets — enter them below before saving.",
+    "secretsEmbedded": "Secrets are included in this QR.",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Server password",
+    "bridgeTokenLabel": "Bridge Token",
+    "bridgeTokenPlaceholder": "OC_BRIDGE_TOKEN",
+    "saveButton": "Save Connection",
+    "testingMessage": "Testing connection…",
+    "rescanButton": "Scan Again",
+    "successTitle": "Connection Saved",
+    "successMessage": "\"{{name}}\" was added to your connections.",
+    "openScannerButton": "Scan QR Code",
+    "errors": {
+      "empty": "The link is empty — scan the QR again or paste the full ocphone:// link.",
+      "malformed-uri": "That is not a valid link — scan the QR again or paste the full ocphone:// link.",
+      "scheme": "Wrong link type — expected ocphone:// from the workstation QR.",
+      "host": "Wrong link target — expected ocphone://connect.",
+      "version": "Unsupported link version — update this app and regenerate the QR.",
+      "missing-d": "This link carries no connection data — regenerate the QR.",
+      "bad-encoding": "The link data is corrupted — scan the QR again.",
+      "bad-json": "The link data is not valid — regenerate the QR.",
+      "payload-version": "Unsupported connection version — update this app and regenerate the QR.",
+      "missing-field": "The QR is missing \"{{field}}\" — regenerate it or enter it below.",
+      "bad-field": "The QR field \"{{field}}\" is invalid — regenerate it or fix it below.",
+      "bad-url": "The \"{{field}}\" URL must start with http:// or https://."
+    }
+  },
+  "terminal": {
+    "title": "Terminal",
+    "needsV2Title": "Server Too Old",
+    "needsV2Body": "Terminals need opencode v2 on \"{{name}}\". Update the server to use this.",
+    "loadFailed": "Could not load the terminal. Please try again.",
+    "connecting": "Connecting…",
+    "disconnected": "Disconnected.",
+    "detached": "Detached from \"{{name}}\" — still running.",
+    "exited": "Process exited",
+    "exitedBody": "exit code {{code}}",
+    "authFailed": "Authentication failed — check this connection's credentials.",
+    "notFound": "Terminal not found on the server.",
+    "tmuxTitle": "{{name}}",
+    "tmuxAttachedHint": "Attached to {{name}}",
+    "detach": "Detach",
+    "keys": {
+      "esc": "Escape key",
+      "tab": "Tab key",
+      "ctrl": "Control modifier (tap, then a key)",
+      "int": "Interrupt (Ctrl+C)",
+      "left": "Left arrow",
+      "up": "Up arrow",
+      "down": "Down arrow",
+      "right": "Right arrow",
+      "keyboard": "Show keyboard"
+    },
+    "inputLabel": "Terminal input"
+  },
+  "terminals": {
+    "tabs": {
+      "tmux": "tmux",
+      "serverPty": "Server PTY"
+    },
+    "tmux": {
+      "openTerminal": "Open Terminal",
+      "opening": "Opening…",
+      "openFailedTitle": "Couldn't Open Terminal"
+    },
+    "pty": {
+      "needsV2Title": "Server Too Old",
+      "needsV2Body": "Server terminals need opencode v2 on \"{{name}}\".",
+      "loadFailed": "Could not load terminals. Pull to retry.",
+      "authHint": "Check this connection's credentials.",
+      "openHint": "Tap to open",
+      "empty": "No terminals yet.",
+      "newPty": "New Terminal",
+      "titleLabel": "Title",
+      "cwdLabel": "Working Directory",
+      "commandLabel": "Command",
+      "createButton": "Create Terminal",
+      "killTitle": "Kill Terminal",
+      "killMessage": "Terminate \"{{title}}\"? Running processes will be killed."
+    }
   }
 }

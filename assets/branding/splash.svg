@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Splash mark. Transparent background: the splash background color comes
+       from app.json splash.backgroundColor and @color/splashscreen_background
+       in the prebuilt android/ project. Generous padding because the splash
+       uses resizeMode contain. -->
+  <g transform="translate(256 256) scale(0.62) translate(-512 -512)">
+    <rect x="232" y="232" width="560" height="560" rx="128" fill="none" stroke="#82aaff" stroke-width="52"/>
+    <polyline points="376,416 496,512 376,608" fill="none" stroke="#82aaff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="536" y="486" width="104" height="52" rx="10" fill="#c8d3f5"/>
+  </g>
+</svg>

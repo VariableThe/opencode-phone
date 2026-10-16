@@ -15,6 +15,7 @@ import { buildRequestHeaders } from "./headers"
 import { SSEParser } from "./sse"
 import { apiErrorFor } from "./api-error"
 import { loadSessionList } from "./session-list"
+import { parseV1FileContent, toPreview } from "./fs-read"
 import type { FileRoot } from "./file-roots"
 
 export { ApiAuthError, isAuthError } from "./api-error"
@@ -169,6 +170,17 @@ export interface FileEntry {
   absolute: string
   type: "file" | "directory"
   ignored: boolean
+}
+
+// Read-only file content — same shape as the v2 client's FileContent (see
+// sdk.ts) so screens stay transport-agnostic.
+export interface FileContent {
+  text: string
+  binary: boolean
+  truncated: boolean
+  contentType: string
+  bytes: number
+  chars: number
 }
 
 export interface Event {
@@ -343,6 +355,39 @@ export function createV1Client(config: ClientConfig) {
           throw err
         }
       },
+      // Read-only file content via GET /file/content?path= (the v1 `file.read`
+      // route, LegacyContent `{type, content, encoding?, mimeType?}` — shape
+      // read from upstream v1.18.32 source, not live-verified). request()
+      // cannot serve this: it JSON-parses unconditionally, while proxies may
+      // hand back a bare string. Same FileContent shape as the v2 client.
+      read: async (params: { path: string }): Promise<FileContent> => {
+        const query = new URLSearchParams({ path: params.path })
+        const response = await fetchWithTimeout(`${config.baseUrl}/file/content?${query.toString()}`, {
+          headers: createHeaders(config),
+        })
+        if (!response.ok) {
+          const body = await response.text()
+          throw apiErrorFor(response.status, `API Error: ${response.status} - ${body}`)
+        }
+        const raw = await response.text()
+        let parsed: unknown = raw
+        try {
+          parsed = JSON.parse(raw)
+        } catch {
+          // Bare-string body — parseV1FileContent handles it as raw text.
+        }
+        const content = parseV1FileContent(parsed)
+        if (!content) throw new Error(`Unexpected /file/content response for ${params.path}`)
+        const preview = toPreview(content.text)
+        return {
+          text: preview.text,
+          binary: content.binary,
+          truncated: preview.truncated,
+          contentType: "",
+          bytes: content.text.length,
+          chars: preview.totalChars,
+        }
+      },
     },
 
     path: {
@@ -381,10 +426,23 @@ export function createV1Client(config: ClientConfig) {
 
       get: (sessionID: string) => request<Session>(config, `/session/${sessionID}`),
 
-      create: (params?: { title?: string }) =>
+      // v1 creation is directory-scoped by the client's directory header
+      // (there is no body location), so `directory` is accepted for call-site
+      // uniformity with the v2 client but deliberately NOT serialized — the
+      // wire body stays `{title}`-only exactly as before. Same for
+      // agent/model: v1 carries them per-prompt, not as session state, so
+      // they are accepted for signature uniformity and ignored here; the
+      // catalog selection still rides on the first prompt via sendMessage.
+      create: (params?: {
+        title?: string
+        directory?: string
+        agent?: string
+        model?: { providerID: string; modelID: string }
+        variant?: string
+      }) =>
         request<Session>(config, "/session", {
           method: "POST",
-          body: JSON.stringify(params || {}),
+          body: JSON.stringify(params?.title ? { title: params.title } : {}),
         }),
 
       delete: (sessionID: string) => request<void>(config, `/session/${sessionID}`, { method: "DELETE" }),
@@ -394,6 +452,20 @@ export function createV1Client(config: ClientConfig) {
           method: "PATCH",
           body: JSON.stringify(params),
         }),
+
+      // v1 has no session-state agent/model routes — both ride per-prompt
+      // (see prompt() below). These exist only for signature uniformity with
+      // the v2 client (createClient casts this client to Client) and always
+      // reject so callers fall back to the local-only selection path instead
+      // of pretending a server switch happened.
+      setAgent: (_sessionID: string, _agent: string): Promise<Session> =>
+        Promise.reject(new Error("v1 server: agent applies per-prompt, not as session state")),
+
+      setModel: (
+        _sessionID: string,
+        _model: { providerID: string; modelID: string },
+        _variant?: string,
+      ): Promise<Session> => Promise.reject(new Error("v1 server: model applies per-prompt, not as session state")),
 
       messages: (sessionID: string, params?: { limit?: number }) => {
         const query = new URLSearchParams()

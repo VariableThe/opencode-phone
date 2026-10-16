@@ -40,10 +40,15 @@ test("both roles get header buttons, adjacent and right-aligned", () => {
   assert.match(src, /onPress=\{\(\) => onEdit\(message\.id\)\}/)
 
   // "Select text" sits immediately left of "Edit": source order inside one
-  // group, and the group (not each chip) owns the right-alignment.
+  // group, and the group (not each chip) owns the right-alignment. A queued
+  // (not yet delivered) message additionally shows Cancel first.
   assert.ok(
     src.indexOf("message-select-text") < src.indexOf("message-edit"),
     "Select text must precede Edit in the group",
+  )
+  assert.ok(
+    src.indexOf("message-cancel-queued") < src.indexOf("message-select-text"),
+    "Cancel must precede Select text in the group",
   )
   assert.match(src, /<View style=\{s\.actions\}>/)
   const groupStyle = src.slice(src.indexOf("actions: {"), src.indexOf("selectChip: {"))
@@ -56,7 +61,7 @@ test("both roles get header buttons, adjacent and right-aligned", () => {
   // A button label that is itself selectable text is how a tap turns into a
   // selection instead of an action.
   const chipLabels = src.split("\n").filter((line) => /<Text selectable/.test(line))
-  assert.equal(chipLabels.length, 2, "both chips render a label")
+  assert.equal(chipLabels.length, 3, "Cancel, Select text and Edit chips render a label")
   for (const line of chipLabels) {
     assert.ok(line.includes("selectable={false}"), line)
     assert.ok(line.includes("s.selectChipText"), line)
@@ -83,7 +88,11 @@ test("message text is not inline-selectable on Android", () => {
 test("the session screen wires the buttons to single-implementation handlers", () => {
   const src = readFileSync(path.join(here, "..", "..", "app", "session", "[id].tsx"), "utf8")
   assert.match(src, /onSelectText=\{openSelectTextSheet\}/)
-  assert.match(src, /onEdit=\{startEditFlow\}/)
+  // One edit entry point: queued items cancel-and-resend via handleQueuedEdit,
+  // committed messages run the revert flow in startEditFlow.
+  assert.match(src, /onEdit=\{handleBubbleEdit\}/)
+  assert.match(src, /onCancelQueued=\{handleCancelQueued\}/)
+  assert.match(src, /cancelQueued\(messageID\)/)
   assert.doesNotMatch(src, /handleMessageLongPress/, "the long-press action sheet is gone")
   assert.doesNotMatch(src, /type AlertButton/, "unused with the sheet removed")
   assert.doesNotMatch(src, /import \{ hasSelectableContent, messagePartsToSelectableText \}/)

@@ -56,7 +56,10 @@ capture in `/tmp/opencode/events_full.txt`.
     `{id, modelID, providerID, name, capabilities, variants[], time, cost[], status, enabled, limit:{context,output}}`.
     Default: `GET /api/model/default`.
 19. **Filesystem**: `GET /api/fs/list?path=` → `{location, data:[{path,type:"file"|"directory"}]}`;
-    `GET /api/fs/find`, `GET /api/fs/read/*`, `POST /api/experimental/fs/write`. No `/file/roots`.
+    `GET /api/fs/read/*` → raw bytes (`application/octet-stream`); the path is
+    part of the URL (`/api/fs/read//abs/path` for an absolute path — `?path=`
+    on the read route 404s; live-verified 2.0.29).
+    `GET /api/fs/find`, `POST /api/experimental/fs/write`. No `/file/roots`.
 20. **Location** (was `/path` + directory header): `GET /api/location` → `{directory, project:{id,directory,canonical}}`.
     Project list `GET /api/project` → array of `{id, canonical, time, sandboxes}`.
 21. **Config**: `GET /api/config` → array of config documents.
@@ -85,6 +88,12 @@ Forms: `form.created {form:Form.Info}`, `form.replied {id,sessionID,answer}`, `f
 ## Verified probe notes
 
 - `POST /api/session {title}` → `{data: Session.Info}` (probe: sid `ses_...`).
+- Session creation is scoped by the BODY `{location: {directory}}` — the
+  `x-opencode-directory` header and the `location[directory]` query param are
+  both ignored for creation (live-verified 2.0.29: sessions landed in the
+  server default either way; only the body location took effect). Note the
+  pre-existing "create in directory" UI was therefore silently creating in
+  the server default on v2 — fixed by sending the body location.
 - Prompt POST returns `{data: userMessage}` immediately (fire-and-forget like v1).
 - `GET /api/session/{id}/message` returns newest-first (`order` param available);
   includes `idle` messages (`{type:"idle", outcome:"succeeded"}`).

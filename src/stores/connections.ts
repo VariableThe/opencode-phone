@@ -93,6 +93,13 @@ function generateId(): string {
   return Crypto.randomUUID().replace(/-/g, "").slice(0, 16)
 }
 
+// Password for one connection, for callers that rebuild server clients
+// outside the connections store (background evaluator, foreground service
+// config). Returns null when the connection has no stored password.
+export async function connectionPassword(id: string): Promise<string | null> {
+  return SecureStore.getItemAsync(`${PASSWORDS_PREFIX}${id}`).catch(() => null)
+}
+
 function buildClient(
   url: string,
   directory?: string,

@@ -1,11 +1,13 @@
 import { create } from "zustand"
-import { ApiError, type Session, type Message, type Part, type Event, type MessageWithParts, type Client } from "../lib/sdk"
+import { ApiError, type InboxEntry, type Session, type Message, type Part, type Event, type MessageWithParts, type Client } from "../lib/sdk"
 import { useConnections } from "./connections"
 import { useSettings } from "./settings"
 import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, track } from "../lib/analytics"
 import { extractPromptFromParts, type PromptFromParts } from "../lib/prompt-from-parts"
-import { mergeIncomingMessage } from "../lib/message-merge"
+import { mergeIncomingMessage, mergeIncomingPart, reconcileOptimisticParts, swapOptimisticId, mergeHistoryWithPending } from "../lib/message-merge"
+import { seedQueuedMessages } from "../lib/v2-shape"
+import { removeQueued, upsertQueued } from "../lib/composer-queue"
 import { isColdSessionLoad, isLiveEventForSession } from "../lib/session-load-reconcile"
 
 // Helper to convert API response to our internal format
@@ -36,12 +38,17 @@ interface SessionsState {
   loadingMore: boolean
   hasMore: boolean
   error: string | null
+  // Pending queued-message inbox ids per session (v2 `session.inbox.*`).
+  // A user message whose id is listed here isaccepted but not yet delivered —
+  // the transcript renders it with a queued affordance until `inbox.delivered`
+  // (or a cancel) removes it. Seeded from GET .../inbox on selectSession.
+  queued: Record<string, string[]>
 
   // Actions
   loadSessions: () => Promise<void>
   selectSession: (sessionID: string, directory?: string) => Promise<void>
   loadOlderMessages: () => Promise<void>
-  createSession: (title?: string) => Promise<Session | null>
+  createSession: (title?: string, opts?: { agent?: string; model?: { providerID: string; modelID: string } }) => Promise<Session | null>
   deleteSession: (sessionID: string) => Promise<void>
   sendMessage: (
     text: string,
@@ -49,9 +56,14 @@ interface SessionsState {
     agent?: string,
     files?: Array<{ uri: string; mime: string; filename?: string; base64?: string }>,
     variant?: string,
+    delivery?: "steer" | "queue",
   ) => Promise<void>
   abortSession: () => Promise<void>
   refreshMessages: () => Promise<void>
+  // Cancel a queued (not yet delivered) message. Temp-optimistic ids cannot
+  // be cancelled — they resolve to a server inbox id within one POST round
+  // trip, and the cancel affordance appears then.
+  cancelQueued: (inboxID: string) => Promise<{ ok: boolean }>
 
   // Revert (edit sent message) / unrevert (undo the pending revert)
   revertToMessage: (messageID: string) => Promise<RevertResult>
@@ -96,6 +108,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
   loadingMore: false,
   hasMore: false,
   error: null,
+  queued: {},
 
   loadSessions: async () => {
     const connState = useConnections.getState()
@@ -170,6 +183,27 @@ export const useSessions = create<SessionsState>((set, get) => ({
         // If we got exactly PAGE_SIZE messages, there are probably more
         hasMore: messagesResponse.length >= pageSize(),
       })
+
+      // Seed the queued-message set from the server inbox (v2 only — the v1
+      // client has no inbox method and the guarded call degrades to empty).
+      // Queued entries live only in the inbox, never in message history — and
+      // the optimistic local copy died with the process — so seedQueuedMessages
+      // also rebuilds their transcript bubbles from the inbox payload. Without
+      // the message entities the queued ids would be tracked invisibly: nothing
+      // renders and the cancel affordance has no bubble to attach to.
+      void (async () => {
+        const inboxFn = (client.session as { inbox?: (id: string) => Promise<InboxEntry[]> }).inbox
+        if (typeof inboxFn !== "function") return
+        const entries = await inboxFn.call(client.session, sessionID).catch(() => null)
+        if (!entries) return
+        if (seq !== selectSeq) return
+        set((state) => {
+          if (state.currentSession?.id !== sessionID) return {}
+          const seeded = seedQueuedMessages(state.messages, state.parts, sessionID, entries)
+          const merged = seeded.ids.reduce(upsertQueued, state.queued[sessionID] || [])
+          return { messages: seeded.messages, parts: seeded.parts, queued: { ...state.queued, [sessionID]: merged } }
+        })
+      })()
     } catch (err) {
       if (seq !== selectSeq) return
       console.error("Failed to load session:", err)
@@ -190,14 +224,21 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const response = await client.session.messages(session.id)
       const { messages: all, parts: allParts } = parseMessages(response)
 
-      // Merge: use all messages from full fetch, but keep any temp/optimistic messages
+      // Merge: the server list wins, but keep still-pending local messages (a
+      // POST whose receipt hasn't landed yet, plus cold-start-rebuilt queued
+      // bubbles that live only in the inbox) so a just-sent message doesn't
+      // vanish mid-history-load. mergeHistoryWithPending also dedupes the
+      // server list by id — the receipt swap (swapOptimisticId) then drops
+      // the temp when the real id is already here instead of renaming it
+      // into a duplicate pair.
       const existing = get().messages
-      const temp = existing.filter((m) => m.id.startsWith("temp-"))
-      const merged = [...all, ...temp]
+      const queuedIDs = new Set(get().queued[session.id] || [])
+      const pending = existing.filter((m) => m.id.startsWith("temp-") || queuedIDs.has(m.id))
+      const merged = mergeHistoryWithPending(all, pending)
 
       set({
         messages: merged,
-        parts: { ...allParts, ...Object.fromEntries(temp.map((m) => [m.id, get().parts[m.id] || []])) },
+        parts: { ...allParts, ...Object.fromEntries(pending.map((m) => [m.id, get().parts[m.id] || []])) },
         loadingMore: false,
         hasMore: false, // We loaded everything
       })
@@ -207,7 +248,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
     }
   },
 
-  createSession: async (title) => {
+  createSession: async (title, opts) => {
     const connState = useConnections.getState()
     const client = connState.client
     if (!client) {
@@ -216,7 +257,9 @@ export const useSessions = create<SessionsState>((set, get) => ({
     }
 
     try {
-      const created = await client.session.create({ title })
+      // v2 stores agent/model at creation (body fields, verified live); v1
+      // ignores them and carries the catalog choice per-prompt instead.
+      const created = await client.session.create({ title, agent: opts?.agent, model: opts?.model })
       // Don't optimistically add to sessions list — let loadSessions() handle it
       // to avoid duplicate key errors from race conditions
       set({
@@ -254,7 +297,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
     }
   },
 
-  sendMessage: async (text, model, agent, files, variant) => {
+  sendMessage: async (text, model, agent, files, variant, delivery) => {
     const client = clientFor(get().currentSession?.directory)
     const session = get().currentSession
     if (!client || !session) {
@@ -262,6 +305,9 @@ export const useSessions = create<SessionsState>((set, get) => ({
       return
     }
 
+    // Temp id of the optimistic message, hoisted so the catch block can drop
+    // its queued entry on failure (consts inside try are not catch-visible).
+    let tempID = ""
     try {
       set((state) => ({ sending: { ...state.sending, [session.id]: true }, error: null }))
       track(AnalyticsEvent.MessageSent)
@@ -276,6 +322,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
         model,
         agent,
       }
+      tempID = userMessage.id
       const optimisticParts: Part[] = []
       if (text) {
         optimisticParts.push({
@@ -302,6 +349,13 @@ export const useSessions = create<SessionsState>((set, get) => ({
       set((state) => ({
         messages: [...state.messages, userMessage],
         parts: { ...state.parts, [userMessage.id]: optimisticParts },
+        // A busy-session send rides `delivery: "queue"` — mark the optimistic
+        // message queued so the transcript shows it pending immediately; the
+        // POST receipt below swaps in the real inbox id.
+        queued:
+          delivery === "queue"
+            ? { ...state.queued, [session.id]: upsertQueued(state.queued[session.id] || [], userMessage.id) }
+            : state.queued,
       }))
 
       // Build prompt parts - images are already converted to JPEG with base64 by toJpeg()
@@ -321,13 +375,66 @@ export const useSessions = create<SessionsState>((set, get) => ({
       // Await submission (POST to /prompt_async resolves fast, well before the
       // streamed response) so a failure here can propagate to the caller — SSE
       // events still update messages/parts/status in real-time on success.
-      await client.session.prompt(session.id, { parts: promptParts, model, agent, variant })
+      // The v2 receipt carries the user-message id (= inbox id when queued),
+      // so swap the optimistic temp id for the real one in one pass.
+      const receipt = await client.session.prompt(session.id, { parts: promptParts, model, agent, variant, delivery })
+      const realID = (receipt as { messageID?: string } | void)?.messageID
+      if (realID && realID !== userMessage.id) {
+        set((state) => {
+          if (state.currentSession?.id !== session.id) return {}
+          // A history fetch that landed mid-POST already holds the real id
+          // next to the temp entry — drop the temp instead of renaming it
+          // into a second same-id entry (swapOptimisticId).
+          const messages = swapOptimisticId(state.messages, userMessage.id, realID)
+          const parts = { ...state.parts }
+          if (parts[userMessage.id]) {
+            // Rename the optimistic parts to the canonical echo ids at the
+            // same time as the message-id swap, so the server echo
+            // (inbox.enqueued fan-out) replaces them in place instead of
+            // appending second copies (see reconcileOptimisticParts).
+            const reconciled = reconcileOptimisticParts(parts[userMessage.id], realID)
+            const serverParts = parts[realID]
+            if (serverParts) {
+              // The server copy already has parts (mid-POST history fetch
+              // or an echo that beat the receipt): fold the optimistic
+              // parts underneath them by id so the server content keeps
+              // authority and nothing renders twice.
+              let base = reconciled
+              for (const p of serverParts) base = mergeIncomingPart(base, p)
+              parts[realID] = base
+            } else {
+              parts[realID] = reconciled
+            }
+            delete parts[userMessage.id]
+          }
+          const sessionQueued = state.queued[session.id] || []
+          const queued = sessionQueued.includes(userMessage.id)
+            ? { ...state.queued, [session.id]: upsertQueued(removeQueued(sessionQueued, userMessage.id), realID) }
+            : state.queued
+          return { messages, parts, queued }
+        })
+      }
+      // Register the run with the notification watcher: if the app is
+      // backgrounded or killed before the SSE completion event arrives, the
+      // periodic/background evaluation settles this session from fresh server
+      // reads instead (stores/session-watch.ts).
+      const activeId = useConnections.getState().activeConnection?.id
+      if (activeId) {
+        const { useSessionWatch } = await import("./session-watch")
+        useSessionWatch.getState().track({
+          connectionId: activeId,
+          sessionId: session.id,
+          directory: session.directory,
+          title: session.title,
+        })
+      }
     } catch (err) {
       console.error("[sendMessage] error:", err)
       const stillCurrent = get().currentSession?.id === session.id
       set((state) => ({
         ...(stillCurrent ? { error: String(err) } : {}),
         sending: { ...state.sending, [session.id]: false },
+        queued: { ...state.queued, [session.id]: removeQueued(state.queued[session.id] || [], tempID) },
       }))
       if (stillCurrent) get().refreshMessages()
       throw err
@@ -344,10 +451,48 @@ export const useSessions = create<SessionsState>((set, get) => ({
       // Mark only after the abort request succeeded — if it failed, the run
       // continues and any eventual completion is a genuine response.
       abortedSessions.add(session.id)
+      // An aborted run is dropped without an alert (settlement rule) — stop
+      // the background watcher polling it too.
+      const { useSessionWatch } = await import("./session-watch")
+      useSessionWatch.getState().dropSession(session.id)
       set((state) => ({ sending: { ...state.sending, [session.id]: false } }))
     } catch {
       set({ error: "Failed to abort session" })
     }
+  },
+
+  // Cancel a queued (not yet delivered) message via DELETE .../inbox/{id}.
+  // Optimistic: the entry (and its transcript bubble) drops immediately and
+  // is restored only if the server rejects the cancel. Temp-optimistic ids
+  // are rejected — they become cancellable once the POST receipt swaps in
+  // the real inbox id.
+  cancelQueued: async (inboxID) => {
+    const session = get().currentSession
+    if (!session || inboxID.startsWith("temp-")) return { ok: false }
+    const client = clientFor(session.directory)
+    const cancelFn = (client?.session as { cancelInbox?: (s: string, i: string) => Promise<void> })?.cancelInbox
+    if (!client || typeof cancelFn !== "function") return { ok: false }
+    const snapshot = get()
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== inboxID),
+      parts: Object.fromEntries(Object.entries(state.parts).filter(([k]) => k !== inboxID)),
+      queued: { ...state.queued, [session.id]: removeQueued(state.queued[session.id] || [], inboxID) },
+    }))
+    const failed = await cancelFn.call(client.session, session.id, inboxID).then(
+      () => false,
+      () => true,
+    )
+    if (!failed) return { ok: true }
+    set((state) => {
+      if (state.currentSession?.id !== session.id) return {}
+      const restored = snapshot.messages.find((m) => m.id === inboxID)
+      return {
+        messages: restored && !state.messages.some((m) => m.id === inboxID) ? [...state.messages, restored] : state.messages,
+        parts: snapshot.parts[inboxID] && !state.parts[inboxID] ? { ...state.parts, [inboxID]: snapshot.parts[inboxID] } : state.parts,
+        queued: { ...state.queued, [session.id]: upsertQueued(state.queued[session.id] || [], inboxID) },
+      }
+    })
+    return { ok: false }
   },
 
   refreshMessages: async () => {
@@ -357,8 +502,24 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
     try {
       const response = await client.session.messages(session.id)
-      const { messages, parts } = parseMessages(response)
-      set({ messages, parts })
+      const { messages: all, parts: allParts } = parseMessages(response)
+      // History-only rebuild — but still-pending local messages live outside
+      // history (a POST whose receipt hasn't landed yet, plus seeded queued
+      // bubbles that live only in the inbox), so carry them across the same
+      // way loadOlderMessages does. A bare set({messages, parts}) here wipes
+      // a queued bubble the inbox seeder just rebuilt whenever the refresh
+      // (busy -> idle, reconnect, send-failure retry) lands while the entry
+      // is still pending. mergeHistoryWithPending dedupes by id, so an entry
+      // delivered between the fetch and this set keeps its single server copy.
+      const existing = get().messages
+      const queuedIDs = new Set(get().queued[session.id] || [])
+      const pending = existing.filter((m) => m.id.startsWith("temp-") || queuedIDs.has(m.id))
+      const merged = mergeHistoryWithPending(all, pending)
+      const currentParts = get().parts
+      set({
+        messages: merged,
+        parts: { ...allParts, ...Object.fromEntries(pending.map((m) => [m.id, currentParts[m.id] || []])) },
+      })
     } catch (error) {
       set({ error: "Failed to refresh messages" })
     }
@@ -442,13 +603,10 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
         set((state) => {
           const messageParts = state.parts[part.messageID] || []
-          const exists = messageParts.some((p) => p.id === part.id)
           return {
             parts: {
               ...state.parts,
-              [part.messageID]: exists
-                ? messageParts.map((p) => (p.id === part.id ? part : p))
-                : [...messageParts, part],
+              [part.messageID]: mergeIncomingPart(messageParts, part),
             },
             // See message.updated above — a live part update is just as
             // much proof of life as a message update.
@@ -464,6 +622,39 @@ export const useSessions = create<SessionsState>((set, get) => ({
         set((state) => ({
           messages: state.messages.filter((m) => m.id !== messageID),
           parts: Object.fromEntries(Object.entries(state.parts).filter(([k]) => k !== messageID)),
+          queued: currentSession
+            ? { ...state.queued, [currentSession.id]: removeQueued(state.queued[currentSession.id] || [], messageID) }
+            : state.queued,
+        }))
+        break
+      }
+
+      case "inbox.enqueued": {
+        const inboxID = props.inboxID as string
+        const inboxSessionID = props.sessionID as string
+        if (!inboxID || !isLiveEventForSession(inboxSessionID, currentSession.id)) return
+        // Only a genuinely-waiting ("queue") entry gets the pending
+        // affordance. An idle send is admitted with delivery "steer" and
+        // delivered immediately — marking it queued flashes a bogus pending
+        // state (and turns Edit into cancel-and-resend) until
+        // `inbox.delivered` lands a moment later. Shapes without a delivery
+        // mode keep the old mark-everything behaviour so a truly queued
+        // message never loses its cancel affordance.
+        if ((props.delivery as string | undefined) === "steer") return
+        set((state) => ({
+          queued: { ...state.queued, [currentSession.id]: upsertQueued(state.queued[currentSession.id] || [], inboxID) },
+        }))
+        break
+      }
+
+      case "inbox.delivered": {
+        const inboxID = props.inboxID as string
+        const inboxSessionID = props.sessionID as string
+        if (!inboxID || !isLiveEventForSession(inboxSessionID, currentSession.id)) return
+        // The queued item is now a real sent message: drop the pending mark
+        // but keep the transcript bubble (it arrived via inbox.enqueued).
+        set((state) => ({
+          queued: { ...state.queued, [currentSession.id]: removeQueued(state.queued[currentSession.id] || [], inboxID) },
         }))
         break
       }

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import BottomSheet, { BottomSheetBackdrop, BottomSheetSectionList, BottomSheetTextInput } from "@gorhom/bottom-sheet"
 import { useTranslation } from "react-i18next"
+import { matchesModelQuery } from "../../lib/model-filter"
 
 interface ModelItem {
   providerID: string
@@ -31,17 +32,13 @@ export function ModelPicker({ providers, selected, isDark, onSelect, sheetRef }:
 
   const sections = useMemo(() => {
     const list = Array.isArray(providers) ? providers : []
-    const q = search.toLowerCase()
     const result = list
       .map((p) => {
+        // Shared matcher (model-filter.ts): trims + lowercases the query and
+        // matches id, display name, provider id and provider name, so the
+        // list always reflects the connected server's catalog.
         const models = (p.models || [])
-          .filter(
-            (m) =>
-              !q ||
-              m.id.toLowerCase().includes(q) ||
-              m.name.toLowerCase().includes(q) ||
-              p.name.toLowerCase().includes(q),
-          )
+          .filter((m) => matchesModelQuery(p.id, p.name || p.id, m.id, m.name || m.id, search))
           .map((m) => ({
             providerID: p.id,
             providerName: p.name || p.id,

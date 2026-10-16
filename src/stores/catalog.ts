@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { useConnections } from "./connections"
-import type { Agent, Command } from "../lib/sdk"
+import { useSessions } from "./sessions"
+import type { Agent, Client, Command } from "../lib/sdk"
 import { chooseModelSelection } from "../lib/model-selection"
 
 export interface ProviderModel {
@@ -28,6 +29,15 @@ function sameModel(left: ModelSelection | null, right: ModelSelection | null) {
   return left?.providerID === right?.providerID && left?.modelID === right?.modelID
 }
 
+export interface SwitchResult {
+  ok: boolean
+  // True only when the server re-read confirms the stored value. False on
+  // v1 (agent/model ride per-prompt there — the local choice still applies
+  // to the next message) or when validation/confirmation fails.
+  persisted: boolean
+  error?: string
+}
+
 interface CatalogState {
   agents: Agent[]
   commands: Command[]
@@ -45,6 +55,17 @@ interface CatalogState {
   setModel: (selection: ModelSelection | null) => void
   setVariant: (variant: string | null) => void
   cycleAgent: (direction?: 1 | -1) => void
+  // Persistent v2 switches: validate against the server-provided lists
+  // first (the server 204s even bogus values and fails only at run time),
+  // POST session state, then confirm via re-read before touching local
+  // state. Local state changes ONLY on confirmation — never optimistically.
+  switchAgent: (sessionID: string, name: string, client?: Client | null) => Promise<SwitchResult>
+  switchModel: (
+    sessionID: string,
+    selection: ModelSelection | null,
+    client?: Client | null,
+    variant?: string | null,
+  ) => Promise<SwitchResult>
 }
 
 export const useCatalog = create<CatalogState>((set, get) => ({
@@ -151,5 +172,54 @@ export const useCatalog = create<CatalogState>((set, get) => ({
     const idx = primary.findIndex((a) => a.name === agent)
     const next = (idx + direction + primary.length) % primary.length
     get().setAgent(primary[next].name)
+  },
+
+  switchAgent: async (sessionID, name, client) => {
+    const known = get().agents.find((a) => a.name === name)
+    if (!known) return { ok: false, persisted: false, error: `Unknown agent: ${name}` }
+    const conn = useConnections.getState()
+    if (conn.activeConnection?.api === "v1") {
+      get().setAgent(name)
+      return { ok: true, persisted: false }
+    }
+    const target = client ?? conn.client
+    if (!target) return { ok: false, persisted: false, error: "No active connection" }
+    const updated = await target.session.setAgent(sessionID, name).catch((err: unknown) => null)
+    if (!updated || updated.agent !== name) return { ok: false, persisted: false, error: "Server did not store the agent" }
+    get().setAgent(name)
+    useSessions.setState((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionID ? updated : s)),
+      currentSession: state.currentSession?.id === sessionID ? updated : state.currentSession,
+    }))
+    return { ok: true, persisted: true }
+  },
+
+  switchModel: async (sessionID, selection, client, variant) => {
+    if (!selection) return { ok: false, persisted: false, error: "No model selected" }
+    const provider = get().providers.find((p) => p.id === selection.providerID)
+    const known = provider?.models.some((m) => m.id === selection.modelID)
+    if (!known) {
+      return { ok: false, persisted: false, error: `Unknown model: ${selection.providerID}/${selection.modelID}` }
+    }
+    const conn = useConnections.getState()
+    if (conn.activeConnection?.api === "v1") {
+      get().setModel(selection)
+      return { ok: true, persisted: false }
+    }
+    const target = client ?? conn.client
+    if (!target) return { ok: false, persisted: false, error: "No active connection" }
+    const updated = await target.session
+      .setModel(sessionID, selection, variant ?? get().variant ?? undefined)
+      .catch((err: unknown) => null)
+    const stored = updated?.model
+    if (!stored || stored.providerID !== selection.providerID || stored.modelID !== selection.modelID) {
+      return { ok: false, persisted: false, error: "Server did not store the model" }
+    }
+    get().setModel(selection)
+    useSessions.setState((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionID ? updated : s)),
+      currentSession: state.currentSession?.id === sessionID ? updated : state.currentSession,
+    }))
+    return { ok: true, persisted: true }
   },
 }))

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Stack, router } from "expo-router"
 import { StatusBar } from "expo-status-bar"
-import { useColorScheme, View, ActivityIndicator, AppState } from "react-native"
+import { View, ActivityIndicator, AppState } from "react-native"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { KeyboardProvider } from "react-native-keyboard-controller"
@@ -10,9 +10,15 @@ import { I18nextProvider, useTranslation } from "react-i18next"
 import i18n from "../src/lib/i18n/config"
 import { useAuth } from "../src/stores/auth"
 import { useConnections } from "../src/stores/connections"
+import { useServerTheme } from "../src/stores/server-theme"
+import { useAppPalette } from "../src/components/useAppPalette"
 import { useEvents } from "../src/stores/events"
 import { useCatalog } from "../src/stores/catalog"
 import { useSettings } from "../src/stores/settings"
+import { useNtfy } from "../src/stores/ntfy"
+import { useSessionWatch } from "../src/stores/session-watch"
+import { syncBackgroundPoll } from "../src/lib/background-poll"
+import { syncForegroundService } from "../src/lib/foreground-service"
 import { AuthGate } from "../src/components/AuthGate"
 import { ErrorBoundary } from "../src/components/ErrorBoundary"
 import { TelemetryConsentModal } from "../src/components/TelemetryConsentModal"
@@ -25,14 +31,47 @@ import { flushPendingSignups } from "../src/lib/waitlist-queue-storage"
 const queryClient = new QueryClient()
 
 function RootLayout() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === "dark"
+  // Palette colors replace the hardcoded dark/light values below only while a
+  // server theme is active (`themed`); otherwise the UI is pixel-identical.
+  const { isDark, palette, themed } = useAppPalette()
   const { t } = useTranslation()
 
   const { initialize: initAuth, isLoading: authLoading } = useAuth()
-  const { loadConnections, isLoading: connectionsLoading, client } = useConnections()
+  const { loadConnections, isLoading: connectionsLoading, client, activeConnection } = useConnections()
   const sseStarted = useRef(false)
   const notifPermissionRequested = useRef(false)
+  // Stringified ntfy target: re-syncs the topic subscriber when the user
+  // toggles it or edits URL/topic (including the post-load update from
+  // SecureStore, which lands after the mount effect below).
+  const ntfyTarget = useSettings((s) => (s.ntfy.enabled ? `${s.ntfy.baseUrl} ${s.ntfy.topic}` : "off"))
+  // In-app/background transport prefs (no extra service): the periodic
+  // background task registration and the Android foreground service follow
+  // these switches, re-syncing after the SecureStore load lands.
+  const backgroundPoll = useSettings((s) => s.backgroundPoll)
+  const foregroundService = useSettings((s) => s.foregroundService)
+  const settingsLoaded = useSettings((s) => s.loaded)
+  // Watch-list version counter: re-sends the foreground service config when
+  // sessions are tracked/untracked (prompt sent, run settled, abort).
+  const watchRevision = useSessionWatch((s) => s.watched.length)
+
+  useEffect(() => {
+    useSessionWatch.getState().hydrate()
+  }, [])
+
+  useEffect(() => {
+    if (settingsLoaded) void syncBackgroundPoll(backgroundPoll)
+  }, [settingsLoaded, backgroundPoll])
+
+  useEffect(() => {
+    if (settingsLoaded) void syncForegroundService(foregroundService)
+    // watchRevision re-sends the native poll set when sessions are
+    // tracked/untracked (prompt sent, run settled, abort). Connection
+    // switches are covered because the SSE busy hook re-tracks there.
+  }, [settingsLoaded, foregroundService, watchRevision])
+
+  useEffect(() => {
+    useNtfy.getState().sync()
+  }, [ntfyTarget])
 
   // Telemetry consent state: null = loading, 'unknown' = show modal, else decided
   const [consentState, setConsentState] = useState<"loading" | "unknown" | "decided">("loading")
@@ -48,9 +87,41 @@ function RootLayout() {
     // Navigate to session when user taps a notification. Connection-drop
     // notifications carry no sessionId (they aren't about a session) — route
     // to the home tab instead of "/session/" (an empty, dead-end route).
-    const unsubNotifications = notifications.onTap((data) => {
-      if (data.sessionId) router.push(`/session/${data.sessionId}`)
-      else router.push("/")
+    // Session alerts carry the owning connection's id (non-secret): when the
+    // tap names a connection that is no longer active (e.g. the user
+    // switched servers after sending the prompt), switch back first so the
+    // session screen resolves against the right server.
+    const routeNotificationTap = (data: notifications.NotificationData) => {
+      if (!data.sessionId) {
+        router.push("/")
+        return
+      }
+      const conn = useConnections.getState()
+      if (data.connectionId && data.connectionId !== conn.activeConnection?.id) {
+        const known = conn.connections.some((c) => c.id === data.connectionId)
+        if (known) {
+          void conn.setActiveConnection(data.connectionId).then(() => {
+            router.push(`/session/${data.sessionId}`)
+          })
+          return
+        }
+      }
+      router.push(`/session/${data.sessionId}`)
+    }
+    const unsubNotifications = notifications.onTap(routeNotificationTap)
+    // Killed-app tap: the tap that launched us has no live listener yet, so
+    // resolve the stored response once connections are loaded.
+    void notifications.lastTap().then((tapped) => {
+      if (tapped) {
+        const waitForConnections = () => {
+          if (useConnections.getState().activeConnection || !useConnections.getState().isLoading) {
+            routeNotificationTap(tapped)
+            return
+          }
+          setTimeout(waitForConnections, 500)
+        }
+        waitForConnections()
+      }
     })
 
     // Load telemetry consent — initialise Sentry only if previously granted
@@ -97,6 +168,19 @@ function RootLayout() {
     return () => sub.remove()
   }, [])
 
+  // Server theme: refresh the cached bridge theme whenever the active
+  // connection changes and on every foreground (cheap, cached per connection,
+  // silent on failure — the UI never blocks on it).
+  useEffect(() => {
+    void useServerTheme.getState().refresh(activeConnection)
+  }, [activeConnection])
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void useServerTheme.getState().refresh(useConnections.getState().activeConnection)
+    })
+    return () => sub.remove()
+  }, [])
+
   // Retry any waitlist signup that couldn't reach the server when the user
   // tapped Join (AGE-87). Runs at cold start and on every foreground, which is
   // the cheapest reliable proxy for "connectivity may have come back" — it is a
@@ -132,6 +216,13 @@ function RootLayout() {
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active" && sseStarted.current) {
         useEvents.getState().reconnectNow()
+        // Same reason as SSE: JS timers were frozen while backgrounded, so
+        // re-poll ntfy immediately instead of waiting out the interval.
+        useNtfy.getState().reconnectNow()
+        // Reconcile watched sessions against fresh server state: anything
+        // that settled while the stream was dead (or while ntfy was the only
+        // listener) notifies now. Skipped internally while SSE is live.
+        void useSessionWatch.getState().evaluateNow("foreground")
       }
     })
     return () => sub.remove()
@@ -176,10 +267,10 @@ function RootLayout() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
+          backgroundColor: themed ? palette.background : isDark ? "#0a0a0a" : "#ffffff",
         }}
       >
-        <ActivityIndicator size="large" color={isDark ? "#ffffff" : "#0a0a0a"} />
+        <ActivityIndicator size="large" color={themed ? palette.text : isDark ? "#ffffff" : "#0a0a0a"} />
       </View>
     )
   }
@@ -198,11 +289,11 @@ function RootLayout() {
             <Stack
               screenOptions={{
                 headerStyle: {
-                  backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
+                  backgroundColor: themed ? palette.background : isDark ? "#0a0a0a" : "#ffffff",
                 },
-                headerTintColor: isDark ? "#ffffff" : "#0a0a0a",
+                headerTintColor: themed ? palette.text : isDark ? "#ffffff" : "#0a0a0a",
                 contentStyle: {
-                  backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
+                  backgroundColor: themed ? palette.background : isDark ? "#0a0a0a" : "#ffffff",
                 },
               }}
             >
@@ -236,9 +327,30 @@ function RootLayout() {
                 }}
               />
               <Stack.Screen
+                name="connection/scan"
+                options={{
+                  title: t("nav.qrScanTitle"),
+                  presentation: "modal",
+                }}
+              />
+              <Stack.Screen
                 name="terminals"
                 options={{
                   title: "Terminals",
+                  presentation: "card",
+                }}
+              />
+              <Stack.Screen
+                name="browse"
+                options={{
+                  title: t("browse.title"),
+                  presentation: "card",
+                }}
+              />
+              <Stack.Screen
+                name="terminal/[id]"
+                options={{
+                  title: t("terminal.title"),
                   presentation: "card",
                 }}
               />

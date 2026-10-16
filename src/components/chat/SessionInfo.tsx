@@ -4,6 +4,9 @@ import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Message, Session } from "../../lib/sdk"
 import type { Provider } from "../../stores/catalog"
+import type { AppPalette } from "../../lib/opencode-theme"
+import { formatRelativeTime } from "../../lib/relative-time"
+import { useNow } from "../../lib/use-now"
 
 interface Props {
   session: Session | null
@@ -11,6 +14,7 @@ interface Props {
   providers: Provider[]
   visible: boolean
   isDark: boolean
+  palette?: AppPalette
   hasMore: boolean
   loadingAll: boolean
   onLoadAll: () => void
@@ -28,16 +32,18 @@ function formatCost(cost: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cost)
 }
 
-function formatTime(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diff = Date.now() - ts
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return t("chat.sessionInfo.time.justNow")
-  if (mins < 60) return t("chat.sessionInfo.time.minutesAgo", { count: mins })
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return t("chat.sessionInfo.time.hoursAgo", { count: hours })
-  const days = Math.floor(hours / 24)
-  if (days < 7) return t("chat.sessionInfo.time.daysAgo", { count: days })
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+// Buckets from lib/relative-time.ts rendered through this panel's existing
+// strings; `now` is a ticking clock (useNow) so created/updated advance while
+// the panel is open instead of freezing at first render.
+function formatTime(
+  ts: number,
+  now: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  return (
+    formatRelativeTime(ts, now, t, "chat.sessionInfo.time") ??
+    new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  )
 }
 
 export function SessionInfo({
@@ -46,6 +52,7 @@ export function SessionInfo({
   providers,
   visible,
   isDark,
+  palette,
   hasMore,
   loadingAll,
   onLoadAll,
@@ -53,6 +60,8 @@ export function SessionInfo({
   onClose,
 }: Props) {
   const { t } = useTranslation()
+  // Ticking clock for the created/updated relative labels (see formatTime).
+  const now = useNow()
   // Match TUI: last assistant message tokens (context window), cumulative cost
   const stats = useMemo(() => {
     let cost = 0
@@ -94,7 +103,13 @@ export function SessionInfo({
   const updated = session?.time.updated
 
   return (
-    <View style={[s.container, isDark && s.containerDark]}>
+    <View
+      style={[
+        s.container,
+        isDark && s.containerDark,
+        palette && { backgroundColor: palette.background, borderBottomColor: palette.borderSubtle },
+      ]}
+    >
       {/* Top row: tokens + context % + cost — matches TUI header */}
       <View style={s.row}>
         <View style={s.costRow}>
@@ -153,10 +168,10 @@ export function SessionInfo({
       {/* Session metadata */}
       <View style={s.meta}>
         {created && (
-          <MetaItem icon="time-outline" label={t("chat.sessionInfo.meta.created")} value={formatTime(created, t)} isDark={isDark} />
+          <MetaItem icon="time-outline" label={t("chat.sessionInfo.meta.created")} value={formatTime(created, now, t)} isDark={isDark} />
         )}
         {updated && updated !== created && (
-          <MetaItem icon="refresh-outline" label={t("chat.sessionInfo.meta.updated")} value={formatTime(updated, t)} isDark={isDark} />
+          <MetaItem icon="refresh-outline" label={t("chat.sessionInfo.meta.updated")} value={formatTime(updated, now, t)} isDark={isDark} />
         )}
         <MetaItem
           icon="chatbubbles-outline"

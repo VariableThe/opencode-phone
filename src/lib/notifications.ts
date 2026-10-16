@@ -41,11 +41,14 @@ export const categoryMeta: Record<Category, { labelKey: string; descriptionKey: 
   },
 }
 
-// Default state — permissions and questions on (they block work), the rest off
+// Default state — permissions, questions, completions, errors and connection
+// alerts on. Completion alerts are the point of backgrounding the app: the
+// user asked to be told when the agent finishes responding. (send() still
+// suppresses while the app is foregrounded — deliberate, see below.)
 export const defaultPreferences: Record<Category, boolean> = {
   permissions: true,
   questions: true,
-  completed: false,
+  completed: true,
   errors: true,
   connection: true,
 }
@@ -59,14 +62,20 @@ export interface Payload {
   title: string
   body: string
   sessionId: string
+  // Non-secret routing scope: the owning connection's id, so a tap can
+  // switch back to the connection the session belongs to before opening it.
+  // Never credentials — resolution happens against stored connections.
+  connectionId?: string
   dedupeKey?: string
   dedupeCooldownMs?: number
 }
 
-// Data embedded in the notification for tap handling
-interface NotificationData {
+// Data embedded in the notification for tap handling. Exported so the root
+// layout's tap router can type its handler.
+export interface NotificationData {
   category: Category
   sessionId: string
+  connectionId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +161,7 @@ export async function send(payload: Payload) {
       data: {
         category: payload.category,
         sessionId: payload.sessionId,
+        ...(payload.connectionId ? { connectionId: payload.connectionId } : {}),
       } satisfies NotificationData as Record<string, unknown>,
       sound: "default",
       ...(Platform.OS === "android" ? { channelId: "prompts" } : {}),
@@ -170,8 +180,18 @@ export function onTap(handler: (data: NotificationData) => void) {
     const data = raw as unknown as NotificationData | undefined
     if (!data) return
     if (data.sessionId || data.category === "connection") {
-      handler(data)
+      handler({ category: data.category, sessionId: data.sessionId, connectionId: data.connectionId })
     }
   })
   return () => subscription.remove()
+}
+
+// Last-notification tap when the app was killed: expo-router handles the
+// deep link itself for warm taps, but a killed app needs the stored response.
+export async function lastTap(): Promise<NotificationData | null> {
+  const response = await Notifications.getLastNotificationResponseAsync()
+  if (!response) return null
+  const data = response.notification.request.content.data as unknown as NotificationData | undefined
+  if (!data || (!data.sessionId && data.category !== "connection")) return null
+  return { category: data.category, sessionId: data.sessionId, connectionId: data.connectionId }
 }

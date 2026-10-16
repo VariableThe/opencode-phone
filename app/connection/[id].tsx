@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next"
 import { useConnections } from "../../src/stores/connections"
 import { useEvents } from "../../src/stores/events"
 import type { ConnectionType } from "../../src/lib/types"
+import { openFileBrowser } from "../../src/lib/browse-nav"
 import { probeConnection, shareReport } from "../../src/lib/diagnostics"
 import { captureDiagnostic } from "../../src/lib/sentry"
 import { normalizeServerUrl } from "../../src/lib/server-host"
@@ -40,7 +41,7 @@ export default function EditConnectionScreen() {
   const isDark = colorScheme === "dark"
   const { t } = useTranslation()
 
-  const { connections, updateConnection, removeConnection, testConnection } = useConnections()
+  const { connections, activeConnection, setActiveConnection, updateConnection, removeConnection, testConnection } = useConnections()
 
   const connection = connections.find((c) => c.id === id)
 
@@ -316,7 +317,7 @@ export default function EditConnectionScreen() {
         secureTextEntry
       />
 
-      <Text style={[styles.label, isDark && styles.labelDark]}>Default project dir (optional)</Text>
+      <Text style={[styles.label, isDark && styles.labelDark]}>{t("connection.edit.defaultProjectDir")}</Text>
       <TextInput
         style={[styles.input, isDark && styles.inputDark]}
         placeholder="/home/user/project"
@@ -326,6 +327,15 @@ export default function EditConnectionScreen() {
         autoCapitalize="none"
         autoCorrect={false}
       />
+      <Text style={[styles.hint, isDark && styles.hintDark]}>{t("connection.edit.browseHint")}</Text>
+      <TouchableOpacity
+        style={[styles.testButton, isDark && styles.testButtonDark]}
+        onPress={() => void openFileBrowser(connection, activeConnection?.id === connection.id, setActiveConnection)}
+        testID="browse-files-button"
+      >
+        <Ionicons name="folder-open-outline" size={20} color={isDark ? "#ffffff" : "#0a0a0a"} />
+        <Text style={[styles.testButtonText, isDark && styles.textDark]}>{t("connection.edit.browseFiles")}</Text>
+      </TouchableOpacity>
 
       {/* Actions */}
       <View style={styles.actions}>

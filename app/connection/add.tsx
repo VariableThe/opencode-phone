@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   useColorScheme,
   ActivityIndicator,
   Alert,
-  Linking,
 } from "react-native"
 import { router } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -21,13 +20,6 @@ import { captureDiagnostic } from "../../src/lib/sentry"
 import { normalizeServerHost, normalizeServerUrl } from "../../src/lib/server-host"
 import { buildAuth } from "../../src/lib/auth"
 import { AnalyticsEvent, track } from "../../src/lib/analytics"
-import { submitWaitlistSignup, buildWaitlistMailtoUrl, needsManualEscapeHatch, type QueuedSignup } from "../../src/lib/waitlist"
-import { flushPendingSignups, queuePendingSignup, readPendingSignups, dropPendingSignup } from "../../src/lib/waitlist-queue-storage"
-import appJson from "../../app.json"
-
-// Same read as sentry.ts: app.json is the single source of the user-visible
-// version (package.json/gradle are kept in parity by `npm run check:versions`).
-const APP_VERSION = (appJson as { expo?: { version?: string } }).expo?.version ?? "unknown"
 
 export default function AddConnectionScreen() {
   const colorScheme = useColorScheme()
@@ -46,35 +38,6 @@ export default function AddConnectionScreen() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isConnecting, setIsConnecting] = useState(false)
-  const [waitlistEmail, setWaitlistEmail] = useState("")
-  // "queued" = the POST failed but the signup is persisted on-device and will
-  // be retried on the next foreground/connectivity (AGE-87). It is NOT "sent".
-  const [waitlistState, setWaitlistState] = useState<"idle" | "submitting" | "joined" | "queued">("idle")
-  const [pendingSignup, setPendingSignup] = useState<QueuedSignup | null>(null)
-
-  // Retry anything left over from a previous session as soon as this screen
-  // opens (the root layout also flushes on every foreground), then reflect the
-  // real state back to the user instead of pretending nothing is pending.
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const outcome = await flushPendingSignups().catch(() => null)
-      if (cancelled) return
-      const pending = outcome ? outcome.pending : await readPendingSignups().catch(() => [])
-      if (cancelled) return
-      if (outcome && outcome.synced.length > 0 && pending.length === 0) {
-        setWaitlistState("joined")
-        return
-      }
-      if (pending.length > 0) {
-        setPendingSignup(pending[pending.length - 1])
-        setWaitlistState((current) => (current === "idle" ? "queued" : current))
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const buildUrl = () => {
     if (mode === "advanced") return url.trim()
@@ -238,74 +201,6 @@ export default function AddConnectionScreen() {
     )
   }
 
-  const handleJoinWaitlist = async () => {
-    if (waitlistState === "submitting") return
-    const attemptedEmail = waitlistEmail
-    setWaitlistState("submitting")
-    const result = await submitWaitlistSignup(attemptedEmail)
-    if (result.ok) {
-      // Clear any earlier queued attempt for the same address so the flush
-      // doesn't re-post it.
-      void dropPendingSignup(result.email)
-      setPendingSignup(null)
-      setWaitlistState("joined")
-      return
-    }
-
-    if (!result.retryable) {
-      // The server rejected this address; queueing it would retry forever.
-      setWaitlistState(pendingSignup ? "queued" : "idle")
-      Alert.alert(t("connection.add.waitlist.alertTitle"), result.error)
-      return
-    }
-
-    // Offline / timeout / 5xx: persist and retry later instead of dumping the
-    // user into a mail composer they may never send (AGE-87).
-    const entry = await queuePendingSignup(result.email, result.error)
-    if (entry) {
-      setPendingSignup(entry)
-      setWaitlistState("queued")
-      return
-    }
-
-    // Storage refused the write — we cannot promise to finish this later, so
-    // offer the manual email path explicitly rather than claiming success.
-    setWaitlistState("idle")
-    Alert.alert(t("connection.add.waitlist.alertTitle"), t("connection.add.waitlist.queueFailedMessage"), [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("connection.add.waitlist.emailUsButton"), onPress: () => void openWaitlistMailto(result.email) },
-    ])
-  }
-
-  // Last-resort, user-initiated only. Never opened automatically.
-  const openWaitlistMailto = async (email: string) => {
-    try {
-      await Linking.openURL(buildWaitlistMailtoUrl(email, APP_VERSION))
-    } catch {
-      Alert.alert(t("connection.add.waitlist.alertTitle"), t("connection.add.waitlist.noMailAppMessage"))
-    }
-  }
-
-  // Explicit "Retry" from the queued state — same code path the foreground
-  // flush uses, so there is only one retry implementation.
-  const handleRetryQueued = async () => {
-    setWaitlistState("submitting")
-    const outcome = await flushPendingSignups().catch(() => null)
-    if (outcome && outcome.pending.length === 0 && outcome.synced.length > 0) {
-      setPendingSignup(null)
-      setWaitlistState("joined")
-      return
-    }
-    if (outcome && outcome.pending.length === 0) {
-      // Nothing left pending and nothing synced: the address was rejected.
-      setPendingSignup(null)
-      setWaitlistState("idle")
-      return
-    }
-    if (outcome) setPendingSignup(outcome.pending[outcome.pending.length - 1])
-    setWaitlistState("queued")
-  }
-
   // Quick connect mode - simplified
   if (mode === "quick") {
     return (
@@ -396,6 +291,12 @@ export default function AddConnectionScreen() {
           )}
         </TouchableOpacity>
 
+        {/* QR scan entry point */}
+        <TouchableOpacity style={styles.scanButton} onPress={() => router.push("/connection/scan")}>
+          <Ionicons name="qr-code-outline" size={20} color={isDark ? "#ffffff" : "#0a0a0a"} />
+          <Text style={[styles.scanButtonText, isDark && styles.textDark]}>{t("qrScan.openScannerButton")}</Text>
+        </TouchableOpacity>
+
         {/* Help text */}
         <View style={[styles.helpBox, isDark && styles.helpBoxDark]}>
           <Text style={[styles.helpTitle, isDark && styles.textDark]}>{t("connection.add.quick.helpTitle")}</Text>
@@ -423,83 +324,6 @@ export default function AddConnectionScreen() {
             {"\n"}
             <Text style={styles.code}>opencode serve --hostname 0.0.0.0</Text>
           </Text>
-        </View>
-
-        {/* OpenCode Connect — Coming Soon */}
-        <View style={[styles.connectCard, isDark && styles.connectCardDark]}>
-          <View style={styles.connectCardHeader}>
-            <Ionicons name="cloud-done-outline" size={28} color="#6366f1" />
-            <View style={styles.connectCardTitles}>
-              <Text style={[styles.connectCardTitle, isDark && styles.textDark]}>
-                {t("connection.add.quick.connectCardTitle")}
-              </Text>
-              <View style={styles.connectCardBadge}>
-                <Text style={styles.connectCardBadgeText}>{t("connection.add.quick.connectCardBadge")}</Text>
-              </View>
-            </View>
-          </View>
-          <Text style={[styles.connectCardDesc, isDark && styles.hintDark]}>
-            {t("connection.add.quick.connectCardDesc")}
-          </Text>
-          {waitlistState === "joined" ? (
-            <View style={styles.waitlistSuccess} testID="waitlist-success">
-              <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-              <Text style={[styles.waitlistSuccessText, isDark && styles.textDark]}>
-                {t("connection.add.waitlist.successText")}
-              </Text>
-            </View>
-          ) : waitlistState === "queued" ? (
-            <View testID="waitlist-queued">
-              <View style={styles.waitlistSuccess}>
-                <Ionicons name="time-outline" size={20} color="#f59e0b" />
-                <Text style={[styles.waitlistSuccessText, isDark && styles.textDark]}>
-                  {t("connection.add.waitlist.queuedText")}
-                </Text>
-              </View>
-              {needsManualEscapeHatch(pendingSignup) && (
-                <TouchableOpacity
-                  style={styles.waitlistEscapeHatch}
-                  onPress={() => void openWaitlistMailto(pendingSignup?.email ?? waitlistEmail)}
-                  testID="waitlist-email-us"
-                >
-                  <Text style={styles.waitlistEscapeHatchText}>{t("connection.add.waitlist.emailUsLink")}</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.waitlistEscapeHatch} onPress={() => void handleRetryQueued()} testID="waitlist-retry">
-                <Text style={styles.waitlistEscapeHatchText}>{t("common.retry")}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <TextInput
-                style={[styles.input, isDark && styles.inputDark, { marginTop: 12 }]}
-                placeholder="your@email.com"
-                placeholderTextColor={isDark ? "#666666" : "#999999"}
-                value={waitlistEmail}
-                onChangeText={setWaitlistEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                editable={waitlistState !== "submitting"}
-                testID="waitlist-email-input"
-              />
-              <TouchableOpacity
-                style={styles.waitlistButton}
-                onPress={handleJoinWaitlist}
-                disabled={waitlistState === "submitting"}
-                testID="waitlist-submit-button"
-              >
-                {waitlistState === "submitting" ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <>
-                    <Ionicons name="mail-outline" size={16} color="#ffffff" />
-                    <Text style={styles.waitlistButtonText}>{t("connection.add.waitlist.joinButton")}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
         </View>
 
         {/* Advanced mode link */}
@@ -721,6 +545,22 @@ const styles = StyleSheet.create({
   connectButtonTextDark: {
     color: "#0a0a0a",
   },
+  scanButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e5e5",
+    marginTop: 12,
+  },
+  scanButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0a0a0a",
+  },
   helpBox: {
     backgroundColor: "#f5f5f5",
     borderRadius: 12,
@@ -854,86 +694,5 @@ const styles = StyleSheet.create({
     color: "#0a0a0a",
     marginTop: 32,
     marginBottom: 8,
-  },
-  connectCard: {
-    backgroundColor: "#f0f0ff",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: "#c7d2fe",
-  },
-  connectCardDark: {
-    backgroundColor: "#1e1b4b",
-    borderColor: "#3730a3",
-  },
-  connectCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
-  },
-  connectCardTitles: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  connectCardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0a0a0a",
-  },
-  connectCardBadge: {
-    backgroundColor: "#6366f1",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  connectCardBadgeText: {
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  connectCardDesc: {
-    fontSize: 13,
-    color: "#666666",
-    lineHeight: 20,
-  },
-  waitlistButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#6366f1",
-    marginTop: 12,
-  },
-  waitlistButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  waitlistSuccess: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 12,
-  },
-  waitlistSuccessText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#0a0a0a",
-    lineHeight: 20,
-  },
-  waitlistEscapeHatch: {
-    marginTop: 8,
-    paddingVertical: 4,
-  },
-  waitlistEscapeHatchText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#6366f1",
   },
 })

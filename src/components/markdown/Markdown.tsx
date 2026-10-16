@@ -2,6 +2,8 @@ import { useMemo, type ReactNode } from "react"
 import { View, Text, useColorScheme, Platform, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
+import { defaultPalette, type AppPalette } from "../../lib/opencode-theme"
+import { monoFont } from "../chat/tui"
 
 // react-native-marked's base Renderer hardcodes `selectable` on every plain
 // text node it produces (text/strong/em/del/heading/codespan). On Android,
@@ -26,7 +28,7 @@ class CustomRenderer extends Renderer {
   code(text: string, language?: string, containerStyle?: ViewStyle, _textStyle?: TextStyle) {
     return (
       <View key={this.getKey()} style={containerStyle}>
-        <CodeBlock code={text} language={language} />
+        <CodeBlock code={text} language={language} palette={this.palette} />
       </View>
     )
   }
@@ -54,83 +56,71 @@ class CustomRenderer extends Renderer {
   codespan(text: string, styles?: TextStyle): ReactNode {
     return this.plainText(text, [styles, { fontStyle: "normal", fontWeight: "normal" }])
   }
+
+  constructor(private palette?: AppPalette) {
+    super()
+  }
 }
 
-const mono = Platform.OS === "ios" ? "Menlo" : "monospace"
+const mono = monoFont(Platform.OS)
 
-const lightTheme = {
-  text: { color: "#0a0a0a", fontSize: 15, lineHeight: 22 },
-  paragraph: { marginTop: 0, marginBottom: 8 },
-  h1: { fontSize: 22, fontWeight: "700" as const, color: "#0a0a0a", marginBottom: 8, marginTop: 12 },
-  h2: { fontSize: 19, fontWeight: "600" as const, color: "#0a0a0a", marginBottom: 6, marginTop: 10 },
-  h3: { fontSize: 16, fontWeight: "600" as const, color: "#0a0a0a", marginBottom: 4, marginTop: 8 },
-  link: { color: "#8b5cf6" },
-  blockquote: {
-    backgroundColor: "transparent",
-    borderLeftWidth: 3,
-    borderLeftColor: "#d1d5db",
-    paddingLeft: 12,
-    paddingVertical: 2,
-    marginVertical: 4,
-  },
-  code: {
-    backgroundColor: "#e8e5f0",
-    color: "#6d28d9",
-    fontFamily: mono,
-    fontSize: 13,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  codespan: {
-    backgroundColor: "#e8e5f0",
-    color: "#6d28d9",
-    fontFamily: mono,
-    fontSize: 13,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  list: { marginBottom: 4 },
-  li: { marginBottom: 2 },
-  hr: { backgroundColor: "#e5e5e5", height: 1, marginVertical: 12 },
-  strong: { fontWeight: "700" as const },
-  em: { fontStyle: "italic" as const },
-  strikethrough: { textDecorationLine: "line-through" as const },
-  image: { borderRadius: 8 },
-}
-
-const darkTheme = {
-  ...lightTheme,
-  text: { ...lightTheme.text, color: "#e5e5e5" },
-  h1: { ...lightTheme.h1, color: "#ffffff" },
-  h2: { ...lightTheme.h2, color: "#ffffff" },
-  h3: { ...lightTheme.h3, color: "#ffffff" },
-  link: { color: "#a78bfa" },
-  blockquote: {
-    ...lightTheme.blockquote,
-    borderLeftColor: "#4a4a5a",
-  },
-  code: {
-    ...lightTheme.code,
-    backgroundColor: "#2a2040",
-    color: "#c4b5fd",
-  },
-  codespan: {
-    ...lightTheme.codespan,
-    backgroundColor: "#2a2040",
-    color: "#c4b5fd",
-  },
-  hr: { ...lightTheme.hr, backgroundColor: "#2a2a2a" },
+// TUI transcript styling: flat, monospace, painted from the theme's
+// markdown* tokens (markdownText for body, markdownHeading for headings,
+// markdownLink/LinkText for links, markdownCode for inline code,
+// markdownBlockQuote for the quote rule, markdownHorizontalRule for rules,
+// markdownListItem/Enumeration for bullets). Kept as a function of the
+// palette (not isDark branches) so server themes repaint markdown too.
+function buildTheme(c: AppPalette) {
+  return {
+    text: { color: c.markdownText, fontSize: 14, lineHeight: 21, fontFamily: mono },
+    paragraph: { marginTop: 0, marginBottom: 8 },
+    h1: { fontSize: 19, fontWeight: "700" as const, color: c.markdownHeading, fontFamily: mono, marginBottom: 8, marginTop: 12 },
+    h2: { fontSize: 17, fontWeight: "600" as const, color: c.markdownHeading, fontFamily: mono, marginBottom: 6, marginTop: 10 },
+    h3: { fontSize: 15, fontWeight: "600" as const, color: c.markdownHeading, fontFamily: mono, marginBottom: 4, marginTop: 8 },
+    link: { color: c.markdownLink, fontFamily: mono },
+    blockquote: {
+      backgroundColor: "transparent",
+      borderLeftWidth: 2,
+      borderLeftColor: c.markdownBlockQuote,
+      paddingLeft: 12,
+      paddingVertical: 2,
+      marginVertical: 4,
+    },
+    code: {
+      backgroundColor: c.element,
+      color: c.markdownCode,
+      fontFamily: mono,
+      fontSize: 13,
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+    },
+    codespan: {
+      backgroundColor: c.element,
+      color: c.markdownCode,
+      fontFamily: mono,
+      fontSize: 13,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+    },
+    list: { marginBottom: 4 },
+    li: { marginBottom: 2 },
+    hr: { backgroundColor: c.markdownHorizontalRule, height: 1, marginVertical: 12 },
+    strong: { fontWeight: "700" as const, color: c.markdownStrong },
+    em: { fontStyle: "italic" as const, color: c.markdownEmph },
+    strikethrough: { textDecorationLine: "line-through" as const },
+    image: {},
+  }
 }
 
 interface Props {
   children: string
+  palette?: AppPalette
 }
 
-export function Markdown({ children }: Props) {
-  const isDark = useColorScheme() === "dark"
-  const theme = isDark ? darkTheme : lightTheme
+export function Markdown({ children, palette }: Props) {
+  const scheme = useColorScheme()
+  const c = palette ?? defaultPalette(scheme === "dark" ? "dark" : "light")
+  const theme = useMemo(() => buildTheme(c), [c])
 
   // A module-scope singleton renderer would share one CustomRenderer (and
   // its underlying github-slugger) across every Markdown instance and every
@@ -141,7 +131,7 @@ export function Markdown({ children }: Props) {
   // the renderer to `children` resets the slugger per parse, so keys are
   // deterministic (and stable) for a given value, while re-renders with an
   // unchanged value stay memoized instead of creating a new renderer.
-  const renderer = useMemo(() => new CustomRenderer(), [children])
+  const renderer = useMemo(() => new CustomRenderer(c), [children, c])
 
   // react-native-marked's default <RNMarkdown> export renders blocks inside a
   // FlatList. Chat messages are rendered inside app/session/[id].tsx's own
@@ -155,7 +145,7 @@ export function Markdown({ children }: Props) {
   const elements = useMarkdown(children ?? "", {
     renderer,
     styles: theme,
-    colorScheme: isDark ? "dark" : "light",
+    colorScheme: scheme === "dark" ? "dark" : "light",
   })
 
   if (!children?.trim()) return null

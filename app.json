@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
+      "backgroundColor": "#1a1b26"
     },
     "ios": {
       "supportsTablet": true,
@@ -39,7 +39,8 @@
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F172A"
+        "monochromeImage": "./assets/adaptive-icon-mono.png",
+        "backgroundColor": "#1a1b26"
       }
     },
     "web": {
@@ -80,7 +81,13 @@
           "speechRecognitionPermission": "OpenCode uses speech recognition so you can dictate prompts to your AI coding agent hands-free."
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "OpenCode needs camera access to scan the workstation QR code when adding a connection."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

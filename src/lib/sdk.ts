@@ -16,6 +16,8 @@ import { apiErrorFor, isAuthStatus } from "./api-error"
 import { loadSessionList } from "./session-list"
 import type { FileRoot } from "./file-roots"
 import { createV1Client } from "./sdk-v1"
+import { createPtyClient } from "./pty"
+import { FILE_PREVIEW_MAX_CHARS, FILE_READ_MAX_BYTES, fsReadSuffix, hasBinaryByte, toPreview } from "./fs-read"
 import { detectServerApi, type ProbeRequest, type ServerApi, type ServerIdentity } from "./api-detect"
 import {
   formAnswerFromFields,
@@ -89,6 +91,10 @@ export interface Session {
     messageID: string
     partID?: string
   }
+  // v2 session state (GET /api/session/{id} reports the stored values).
+  // Absent on v1, where agent/model travel per-prompt instead.
+  agent?: string
+  model?: { providerID: string; modelID: string }
 }
 
 export interface Message {
@@ -152,6 +158,10 @@ export interface Part {
     title?: string
     error?: { message: string }
     time?: { start?: number; end?: number }
+    // v2 subagent/task delegations only: the child session id, present in
+    // the server's tool metadata once the run resolves (live-verified on
+    // 2.0.29 — absent/empty while the delegation is still running).
+    subagentSessionID?: string
   }
   // Timing
   time?: { start?: number; end?: number }
@@ -205,9 +215,44 @@ export interface FileEntry {
   ignored: boolean
 }
 
+// Read-only file content for the file browser (app/browse.tsx). `text` is
+// capped at FILE_PREVIEW_MAX_CHARS characters and `truncated` reports whether
+// the cap (or the FILE_READ_MAX_BYTES download slice) cut anything off, so
+// the UI can show a notice instead of hanging on a huge file. `binary` files
+// carry no text. `bytes` is the full downloaded size, `chars` the decoded
+// length before truncation.
+export interface FileContent {
+  text: string
+  binary: boolean
+  truncated: boolean
+  contentType: string
+  bytes: number
+  chars: number
+}
+
 export interface Event {
   type: string
   properties: Record<string, unknown>
+}
+
+// A pending follow-up the server holds in a session's inbox while the
+// session is busy (v2 only). The id doubles as the user-message id once
+// delivered; the payload carries the queued text + attachments so a cold
+// start can rebuild the transcript bubble (see seedQueuedMessages).
+export interface InboxEntry {
+  id: string
+  text: string
+  delivery: string
+  sessionID?: string
+  type?: string
+  time?: number
+  files?: Array<{
+    data?: string
+    mime?: string
+    uri?: string
+    name?: string
+    source?: { type: string; path?: string }
+  }>
 }
 
 export interface HealthResponse {
@@ -341,6 +386,12 @@ function createV2Client(config: ClientConfig) {
   config = { ...config, baseUrl: config.baseUrl.replace(/\/+$/, "") }
   const translator = new V2EventTranslator()
   const loc = () => locationQuery(config.directory)
+  // Native PTY API (GET/POST /api/pty, GET/DELETE /api/pty/{id}) — v2 only.
+  // Errors surface as PtyError/PtyAuthError (see pty.ts), mirroring the
+  // ApiError/ApiAuthError split used by request() above. The interactive
+  // socket (GET /api/pty/{id}/connect -> WebSocket) is NOT exposed here —
+  // that is the follow-up renderer task's job.
+  const pty = createPtyClient({ baseUrl: config.baseUrl, headers: buildRequestHeaders(config) })
 
   const getSession = async (sessionID: string): Promise<Session> => {
     const body = await request<{ data: V2SessionInfo }>(config, `/api/session/${sessionID}`)
@@ -449,6 +500,34 @@ function createV2Client(config: ClientConfig) {
         )
         return toFileEntries(body.location, body.data || [])
       },
+      // Read-only file content. The path travels in the URL
+      // (`/api/fs/read/<path>` — `?path=` 404s, live-verified on 2.0.29);
+      // pass an absolute path. request() cannot serve this: the answer is
+      // raw bytes (application/octet-stream), not JSON.
+      read: async (params: { path: string }): Promise<FileContent> => {
+        const url = `${config.baseUrl}${fsReadSuffix(params.path)}${loc() ? `?${loc()}` : ""}`
+        const response = await fetchWithTimeout(url, { headers: createHeaders(config) })
+        if (!response.ok) {
+          const body = await response.text()
+          throw apiErrorFor(response.status, `API Error: ${response.status} - ${body}`)
+        }
+        const contentType = response.headers.get("content-type") ?? ""
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        if (hasBinaryByte(bytes)) {
+          return { text: "", binary: true, truncated: false, contentType, bytes: bytes.length, chars: 0 }
+        }
+        const sliced = bytes.subarray(0, Math.min(bytes.length, FILE_READ_MAX_BYTES))
+        const full = new TextDecoder("utf-8", { fatal: false }).decode(sliced)
+        const preview = toPreview(full)
+        return {
+          text: preview.text,
+          binary: false,
+          truncated: bytes.length > FILE_READ_MAX_BYTES || preview.truncated,
+          contentType,
+          bytes: bytes.length,
+          chars: full.length,
+        }
+      },
       // v2 has no filesystem-roots endpoint — resolve null so the directory
       // browser falls back to manual path entry (same as pre-roots servers).
       roots: async (): Promise<FileRoot[] | null> => null,
@@ -504,10 +583,39 @@ function createV2Client(config: ClientConfig) {
 
       get: getSession,
 
-      create: async (params?: { title?: string }): Promise<Session> => {
+      // `directory` scopes the new session via the request BODY
+      // (`{location: {directory}}`, per the session.create schema). The
+      // directory header / `location[directory]` query param do NOT scope
+      // creation — live-verified on 2.0.29 that both are ignored and the
+      // session lands in the server default. Callers that already hold a
+      // directory-scoped client (clientForDirectory) should still pass
+      // `directory` explicitly: the client only sets header/query.
+      create: async (params?: {
+        title?: string
+        directory?: string
+        agent?: string
+        model?: { providerID: string; modelID: string }
+        variant?: string
+      }): Promise<Session> => {
         const body = await request<{ data: V2SessionInfo }>(config, "/api/session", {
           method: "POST",
-          body: JSON.stringify(params || {}),
+          body: JSON.stringify({
+            ...(params?.title ? { title: params.title } : {}),
+            ...(params?.directory ? { location: { directory: params.directory } } : {}),
+            // Live-verified on 2.0.29: creation honors these and stores them
+            // (re-GET reports them back), so a new session opens with the
+            // chosen agent/model instead of silently falling back to build.
+            ...(params?.agent ? { agent: params.agent } : {}),
+            ...(params?.model
+              ? {
+                  model: {
+                    id: params.model.modelID,
+                    providerID: params.model.providerID,
+                    ...(params?.variant ? { variant: params.variant } : {}),
+                  },
+                }
+              : {}),
+          }),
         })
         return toSession(body.data)
       },
@@ -520,6 +628,39 @@ function createV2Client(config: ClientConfig) {
         await request<void>(config, `/api/session/${sessionID}`, {
           method: "PATCH",
           body: JSON.stringify({ title: params.title }),
+        })
+        return getSession(sessionID)
+      },
+
+      // Agent and model are SESSION STATE on v2 — switching posts to the
+      // dedicated routes and re-reads the session so callers see the stored
+      // values, not a blind 204. The server 204s even bogus values (verified
+      // live on 2.0.29) and fails only at run time, so callers must validate
+      // against agent.list()/the model catalog BEFORE calling these.
+      // Body shapes matter: {agent} flat, model nested as {model:{id,
+      // providerID}} — a flat {providerID, modelID} answers 400.
+      setAgent: async (sessionID: string, agent: string): Promise<Session> => {
+        await request<void>(config, `/api/session/${sessionID}/agent`, {
+          method: "POST",
+          body: JSON.stringify({ agent }),
+        })
+        return getSession(sessionID)
+      },
+
+      setModel: async (
+        sessionID: string,
+        model: { providerID: string; modelID: string },
+        variant?: string,
+      ): Promise<Session> => {
+        await request<void>(config, `/api/session/${sessionID}/model`, {
+          method: "POST",
+          body: JSON.stringify({
+            model: {
+              id: model.modelID,
+              providerID: model.providerID,
+              ...(variant ? { variant } : {}),
+            },
+          }),
         })
         return getSession(sessionID)
       },
@@ -551,11 +692,18 @@ function createV2Client(config: ClientConfig) {
         return toMessageWithParts(all).reverse()
       },
 
-      // Sends a message and returns the response
+      // Sends a message and returns the created user-message id (which doubles
+      // as the inbox id when the send lands queued — verified live on 2.0.29).
       // Fire-and-forget async prompt - SSE events drive all real-time updates.
       // v2 model/agent selection is session state, applied before the prompt;
       // a staged revert (from "edit message") is committed automatically by the
       // next prompt (verified live), so no explicit commit call is needed.
+      // `delivery` selects server behaviour while the session is busy (both
+      // modes append to the inbox, GET .../inbox, with the receipt echoing the
+      // mode — verified live on 2.0.29): "queue" waits for the next turn,
+      // "steer" redirects the current turn. An idle send omits the flag and
+      // the server defaults it to "steer" (immediate). Omit it on idle
+      // sessions and v1 servers.
       prompt: async (
         sessionID: string,
         params: {
@@ -563,8 +711,9 @@ function createV2Client(config: ClientConfig) {
           model?: { providerID: string; modelID: string }
           agent?: string
           variant?: string
+          delivery?: "steer" | "queue"
         },
-      ): Promise<void> => {
+      ): Promise<{ messageID?: string }> => {
         if (params.model) {
           await request<void>(config, `/api/session/${sessionID}/model`, {
             method: "POST",
@@ -590,10 +739,11 @@ function createV2Client(config: ClientConfig) {
         const files = params.parts
           .filter((p): p is { type: "file"; mime: string; url: string; filename?: string } => p.type === "file")
           .map((p) => ({ uri: p.url, ...(p.filename ? { name: p.filename } : {}) }))
-        await request(config, `/api/session/${sessionID}/prompt`, {
+        const body = await request<{ data?: { id?: string } }>(config, `/api/session/${sessionID}/prompt`, {
           method: "POST",
-          body: JSON.stringify({ text, files }),
+          body: JSON.stringify({ text, files, ...(params.delivery ? { delivery: params.delivery } : {}) }),
         })
+        return { messageID: body?.data?.id }
       },
 
       command: async (
@@ -616,6 +766,49 @@ function createV2Client(config: ClientConfig) {
           }),
         })
       },
+
+      // Queued-message inbox (v2 only — v1 servers have no inbox API and the
+      // v1 client does not implement these; callers must guard). Entries are
+      // pending follow-ups the server holds while the session is busy. The
+      // payload (text + files) and enqueue time travel along so a cold start
+      // can rebuild the transcript bubble for each entry (see
+      // seedQueuedMessages) — the inbox is the only place queued messages
+      // exist before delivery.
+      inbox: async (sessionID: string): Promise<InboxEntry[]> => {
+        const body = await request<{
+          data: Array<{
+            id: string
+            sessionID?: string
+            time?: { created?: number }
+            type?: string
+            payload?: { text?: string; files?: InboxEntry["files"] }
+            delivery?: string
+          }>
+        }>(config, `/api/session/${sessionID}/inbox`)
+        return (body.data || []).map((e) => ({
+          id: e.id,
+          text: e.payload?.text ?? "",
+          delivery: e.delivery ?? "",
+          ...(e.sessionID ? { sessionID: e.sessionID } : {}),
+          ...(e.type ? { type: e.type } : {}),
+          ...(e.time?.created !== undefined ? { time: e.time.created } : {}),
+          ...(e.payload?.files ? { files: e.payload.files } : {}),
+        }))
+      },
+
+      // Cancel a queued message. 204 on success; throws ApiError otherwise.
+      cancelInbox: (sessionID: string, inboxID: string) =>
+        request<void>(config, `/api/session/${sessionID}/inbox/${inboxID}`, { method: "DELETE" }),
+
+      // Switch a queued entry between "queue" and "steer". Note the server
+      // only moves the delivery mode — it cannot edit the queued text
+      // (PATCH without a delivery key 400s, verified live on 2.0.29), so
+      // editing a queued message is cancel-and-resend.
+      setInboxDelivery: (sessionID: string, inboxID: string, delivery: "steer" | "queue") =>
+        request<void>(config, `/api/session/${sessionID}/inbox/${inboxID}`, {
+          method: "PATCH",
+          body: JSON.stringify({ delivery }),
+        }),
 
       // v2 replaces abort with interrupt (POST returns {interrupted}).
       abort: async (sessionID: string): Promise<boolean> => {
@@ -743,6 +936,14 @@ function createV2Client(config: ClientConfig) {
 
     config: {
       get: () => request<unknown>(config, "/api/config"),
+    },
+
+    pty: {
+      list: () => pty.list(),
+      get: (id: string) => pty.get(id),
+      create: (input?: { title?: string; command?: string; args?: string[]; cwd?: string }) => pty.create(input ?? {}),
+      remove: (id: string) => pty.remove(id),
+      update: (id: string, input?: { title?: string; size?: { rows: number; cols: number } }) => pty.update(id, input ?? {}),
     },
   }
 }

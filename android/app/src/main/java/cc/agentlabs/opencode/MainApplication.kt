@@ -25,6 +25,11 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
+              // Hand-wired native module (app code, not an expo module): the
+              // session-monitor foreground service bridge. If `npx expo
+              // prebuild` ever regenerates android/, this line must be
+              // re-added along with the manifest service declaration.
+              add(SessionMonitorPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
