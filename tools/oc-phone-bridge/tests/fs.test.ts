@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { listDir, readTextFile } from '../src/routes/fs.js';
@@ -15,6 +15,8 @@ before(async () => {
   await mkdir(path.join(root, 'sub'));
   await writeFile(path.join(root, 'sub', 'inner.txt'), 'inner');
   await writeFile(path.join(outside, 'secret.txt'), 'top secret');
+  await symlink(outside, path.join(root, 'outside-link'), process.platform === 'win32' ? 'junction' : 'dir');
+  await symlink('loop', path.join(root, 'loop'));
 });
 
 after(async () => {
@@ -28,7 +30,12 @@ describe('fs: allowed-root enforcement', () => {
     assert.equal(out.path, root);
     assert.deepEqual(
       out.entries.map((e) => e.name),
-      ['hello.txt', 'sub'],
+      ['hello.txt', 'loop', 'outside-link', 'sub'],
+    );
+    const link = out.entries.find((e) => e.name === 'outside-link');
+    assert.deepEqual(
+      link && { name: link.name, type: link.type, size: link.size },
+      { name: 'outside-link', type: 'other', size: null },
     );
   });
   it('reads a file inside the root', async () => {
@@ -49,9 +56,14 @@ describe('fs: allowed-root enforcement', () => {
     // sneaky: a sibling whose name merely starts with the root string
     await assert.rejects(() => listDir(root + '-evil', [root]), /outside the allowed roots/);
   });
-  it('rejects symlink-style prefix tricks via nested roots', async () => {
-    // absolute path that shares a string prefix but is not under the root
-    await assert.rejects(() => readTextFile(path.join(outside, 'secret.txt'), [root]), (e: unknown) => {
+  it('rejects a symlink inside an allowed root that points outside it', async () => {
+    await assert.rejects(() => readTextFile(path.join(root, 'outside-link', 'secret.txt'), [root]), (e: unknown) => {
+      assert.equal((e as { status?: number }).status, 403);
+      return true;
+    });
+  });
+  it('rejects an unresolved symlink loop instead of falling back to its lexical path', async () => {
+    await assert.rejects(() => readTextFile(path.join(root, 'loop'), [root]), (e: unknown) => {
       assert.equal((e as { status?: number }).status, 403);
       return true;
     });

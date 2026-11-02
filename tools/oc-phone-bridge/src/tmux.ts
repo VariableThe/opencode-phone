@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
-import { isPathInsideRoots } from './paths.js';
+import { resolveWithinRoots } from './paths.js';
 
 /** Session names are restricted to this shape everywhere (routes + tmux layer). */
 export const SESSION_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -189,23 +189,26 @@ export interface NewSessionOptions {
   allowedRoots?: string[] | undefined;
 }
 
-/** Validate + normalize the `dir` for session creation. */
-export function resolveSessionDir(dir: string, allowedRoots: string[]): string {
+/** Validate + canonicalize the session directory against the allowed roots. */
+export async function resolveSessionDir(dir: string, allowedRoots: string[]): Promise<string> {
   if (!path.isAbsolute(dir)) {
     throw new HttpError(400, '`dir` must be an absolute path', 'INVALID_DIR');
   }
-  const resolved = path.resolve(dir);
-  if (!isPathInsideRoots(resolved, allowedRoots)) {
-    throw new HttpError(403, '`dir` is outside the allowed roots', 'DIR_FORBIDDEN');
+  try {
+    return await resolveWithinRoots(dir, allowedRoots, { param: 'dir' });
+  } catch (error) {
+    if ((error as { status?: number }).status === 403) {
+      throw new HttpError(403, '`dir` is outside the allowed roots', 'DIR_FORBIDDEN');
+    }
+    throw error;
   }
-  return resolved;
 }
 
 export async function newSession(opts: NewSessionOptions): Promise<{ name: string }> {
   assertValidSessionName(opts.name);
   const args = ['new-session', '-d', '-s', opts.name];
   if (opts.dir !== undefined) {
-    const resolved = resolveSessionDir(opts.dir, opts.allowedRoots ?? []);
+    const resolved = await resolveSessionDir(opts.dir, opts.allowedRoots ?? []);
     args.push('-c', resolved);
   }
   if (opts.cmd !== undefined && opts.cmd !== '') {
