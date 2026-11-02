@@ -16,6 +16,7 @@ before(async () => {
   await writeFile(path.join(root, 'sub', 'inner.txt'), 'inner');
   await writeFile(path.join(outside, 'secret.txt'), 'top secret');
   await symlink(outside, path.join(root, 'outside-link'), process.platform === 'win32' ? 'junction' : 'dir');
+  await symlink('loop', path.join(root, 'loop'));
 });
 
 after(async () => {
@@ -29,7 +30,7 @@ describe('fs: allowed-root enforcement', () => {
     assert.equal(out.path, root);
     assert.deepEqual(
       out.entries.map((e) => e.name),
-      ['hello.txt', 'outside-link', 'sub'],
+      ['hello.txt', 'loop', 'outside-link', 'sub'],
     );
     const link = out.entries.find((e) => e.name === 'outside-link');
     assert.deepEqual(
@@ -57,6 +58,12 @@ describe('fs: allowed-root enforcement', () => {
   });
   it('rejects a symlink inside an allowed root that points outside it', async () => {
     await assert.rejects(() => readTextFile(path.join(root, 'outside-link', 'secret.txt'), [root]), (e: unknown) => {
+      assert.equal((e as { status?: number }).status, 403);
+      return true;
+    });
+  });
+  it('rejects an unresolved symlink loop instead of falling back to its lexical path', async () => {
+    await assert.rejects(() => readTextFile(path.join(root, 'loop'), [root]), (e: unknown) => {
       assert.equal((e as { status?: number }).status, 403);
       return true;
     });
