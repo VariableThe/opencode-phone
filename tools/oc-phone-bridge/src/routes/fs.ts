@@ -1,4 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { lstat, readdir, readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
 import { resolveWithinRoots } from '../paths.js';
 import { HttpError } from '../tmux.js';
 
@@ -17,7 +18,7 @@ export async function listDir(
   requestedPath: string,
   allowedRoots: string[],
 ): Promise<{ path: string; entries: FsEntry[] }> {
-  const resolved = resolveWithinRoots(requestedPath, allowedRoots);
+  const resolved = await resolveWithinRoots(requestedPath, allowedRoots);
   let st: Awaited<ReturnType<typeof stat>>;
   try {
     st = await stat(resolved);
@@ -33,7 +34,9 @@ export async function listDir(
       let size: number | null = null;
       let mtime: string | null = null;
       try {
-        const s = await stat(resolved + '/' + d.name);
+        // Do not follow a symlink encountered while listing: metadata about a
+        // target outside the allowed roots must not leak through this route.
+        const s = await lstat(resolved + '/' + d.name);
         size = s.isFile() ? s.size : null;
         mtime = s.mtime.toISOString();
       } catch {
@@ -48,7 +51,7 @@ export async function listDir(
     }),
   );
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return { path: resolved, entries };
+  return { path: path.resolve(requestedPath), entries };
 }
 
 /** GET /fs/read?path= — read a text file inside the allowed roots. */
@@ -56,7 +59,7 @@ export async function readTextFile(
   requestedPath: string,
   allowedRoots: string[],
 ): Promise<{ path: string; size: number; content: string }> {
-  const resolved = resolveWithinRoots(requestedPath, allowedRoots);
+  const resolved = await resolveWithinRoots(requestedPath, allowedRoots);
   let st: Awaited<ReturnType<typeof stat>>;
   try {
     st = await stat(resolved);
@@ -74,5 +77,5 @@ export async function readTextFile(
     );
   }
   const content = await readFile(resolved, 'utf8');
-  return { path: resolved, size: st.size, content };
+  return { path: path.resolve(requestedPath), size: st.size, content };
 }
