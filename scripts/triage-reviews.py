@@ -45,6 +45,10 @@ GH_TOKEN = os.environ.get("GH_TOKEN", "")
 ISSUE_TITLE = "Play Store Review Triage"
 MARKER_RE = re.compile(r"<!-- review-triage:([^>]*?) -->")
 
+
+class IssueLookupError(RuntimeError):
+    """Raised when the GitHub issue lookup cannot prove its result."""
+
 SCOPES = ["https://www.googleapis.com/auth/androidpublisher"]
 
 STOPWORDS = {
@@ -133,12 +137,30 @@ def find_existing_issue():
     )
     if result.returncode != 0:
         print(f"  ⚠️ gh issue list failed: {result.stderr.strip()}", file=sys.stderr)
-        return None
-    issues = json.loads(result.stdout or "[]")
+        raise IssueLookupError("gh issue list failed")
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise IssueLookupError("gh issue list returned invalid JSON") from exc
+    if not isinstance(issues, list):
+        raise IssueLookupError("gh issue list returned an unexpected JSON shape")
+
+    matches = []
     for issue in issues:
+        if not isinstance(issue, dict) or not isinstance(issue.get("title"), str):
+            raise IssueLookupError("gh issue list returned a malformed issue")
         if issue["title"] == ISSUE_TITLE:
-            return issue
-    return None
+            number = issue.get("number")
+            body = issue.get("body")
+            if isinstance(number, bool) or not isinstance(number, int):
+                raise IssueLookupError("matching issue has no valid number")
+            if body is not None and not isinstance(body, str):
+                raise IssueLookupError("matching issue has an invalid body")
+            matches.append(issue)
+
+    if len(matches) > 1:
+        raise IssueLookupError("multiple matching triage issues found")
+    return matches[0] if matches else None
 
 
 def build_body(reviews, review_ids_marker):
@@ -240,7 +262,11 @@ def main():
         print("No actionable reviews in window. Skipping.")
         return
 
-    existing = find_existing_issue()
+    try:
+        existing = find_existing_issue()
+    except IssueLookupError as exc:
+        print(f"  ❌ Refusing to write issue: {exc}", file=sys.stderr)
+        return 1
     old_marker = ""
     if existing:
         match = MARKER_RE.search(existing.get("body") or "")
@@ -259,4 +285,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)
