@@ -54,6 +54,11 @@ class TriageReviewsTests(unittest.TestCase):
             with self.assertRaises(triage.IssueLookupError):
                 triage.find_existing_issue()
 
+    def test_empty_lookup_output_is_uncertain(self):
+        with patch.object(triage.subprocess, "run", return_value=gh_result("   \n")):
+            with self.assertRaises(triage.IssueLookupError):
+                triage.find_existing_issue()
+
     def test_ambiguous_lookup_is_uncertain(self):
         issues = [{"number": 1, "title": triage.ISSUE_TITLE, "body": "a"},
                   {"number": 2, "title": triage.ISSUE_TITLE, "body": "b"}]

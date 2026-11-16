@@ -138,8 +138,10 @@ def find_existing_issue():
     if result.returncode != 0:
         print(f"  ⚠️ gh issue list failed: {result.stderr.strip()}", file=sys.stderr)
         raise IssueLookupError("gh issue list failed")
+    if not isinstance(result.stdout, str) or not result.stdout.strip():
+        raise IssueLookupError("gh issue list returned empty output")
     try:
-        issues = json.loads(result.stdout or "[]")
+        issues = json.loads(result.stdout)
     except (TypeError, json.JSONDecodeError) as exc:
         raise IssueLookupError("gh issue list returned invalid JSON") from exc
     if not isinstance(issues, list):
