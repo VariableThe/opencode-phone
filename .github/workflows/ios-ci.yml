@@ -46,8 +46,14 @@ jobs:
       - name: Install dependencies (deterministic)
         run: npm ci --legacy-peer-deps
 
+      - name: Install oc-notify dependencies (deterministic)
+        run: npm ci --prefix tools/oc-notify --ignore-scripts
+
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Typecheck oc-notify
+        run: npm --prefix tools/oc-notify run typecheck
 
       - name: Unit tests
         run: npm test
