@@ -5,6 +5,12 @@
   "type": "module",
   "description": "OpenCode plugin: phone notifications via self-hosted ntfy",
   "scripts": {
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.19.5",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.9.2"
   }
 }
